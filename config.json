@@ -1,0 +1,46 @@
+{
+  "bot": {
+    "name": "WhatsApp AI Assistant",
+    "autoViewStatus": true,
+    "autoReactStatus": false,
+    "statusReactionEmoji": "💚",
+    "autoReply": true,
+    "replyMode": "ai",
+    "ignoreGroups": true,
+    "naturalDelayMs": 2500,
+    "allowedSenders": [],
+    "ignoredSenders": []
+  },
+  "ai": {
+    "provider": "gemini",
+    "geminiApiKey": "AQ.Ab8RN6KxvFNX0lTkEXAA0zH_MigKHMf49tBR7I0ScSqb1CoTeA",
+    "model": "gemini-2.0-flash",
+    "systemInstructions": "You are a polite, helpful WhatsApp assistant. \nReply concisely and conversationally. Keep answers short and appropriate for instant messaging."
+  },
+  "rules": [
+    {
+      "id": "1",
+      "trigger": "hello",
+      "type": "contains",
+      "response": "Hello! 👋 I am  Jean, an automated assistant developed by Jean Marie. How can I help you today?"
+    },
+    {
+      "id": "2",
+      "trigger": "price",
+      "type": "contains",
+      "response": "For pricing details, please reach out or ask specific questions here!"
+    },
+    {
+      "id": "1785075720594",
+      "trigger": "hey",
+      "type": "contains",
+      "response": "Hello! 👋 I am  Jean, an automated assistant developed by Jean Marie. How can I help you today?"
+    },
+    {
+      "id": "1785075756418",
+      "trigger": "hi",
+      "type": "contains",
+      "response": "Hello! 👋 I am  Jean, an automated assistant developed by Jean Marie. How can I help you today?"
+    }
+  ]
+}
