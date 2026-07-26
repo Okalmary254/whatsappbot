@@ -275,74 +275,104 @@ function initPairingForm() {
 
 // Populate Settings & Rules from Config
 function applyConfig(config) {
+  if (!config) return;
   currentConfig = config;
   currentRules = config.rules || [];
 
-  document.getElementById('toggleAutoStatus').checked = config.bot.autoViewStatus ?? true;
-  document.getElementById('toggleAutoReply').checked = config.bot.autoReply ?? true;
+  const toggleStatus = document.getElementById('toggleAutoStatus');
+  const toggleReply = document.getElementById('toggleAutoReply');
+  const replyMode = document.getElementById('replyMode');
+  const geminiModel = document.getElementById('geminiModel') || document.getElementById('aiModel');
+  const apiKey = document.getElementById('geminiApiKey');
+  const instructions = document.getElementById('systemInstructions');
+  const delayInput = document.getElementById('naturalDelayMs') || document.getElementById('naturalDelay');
+  const ignoreGroups = document.getElementById('ignoreGroups');
 
-  document.getElementById('replyMode').value = config.bot.replyMode || 'ai';
-  const aiModelEl = document.getElementById('aiModel');
-  if (aiModelEl) aiModelEl.value = config.ai.model || 'gemini-2.0-flash';
-
-  document.getElementById('geminiApiKey').value = config.ai.geminiApiKey || '';
-  document.getElementById('systemInstructions').value = config.ai.systemInstructions || '';
-  document.getElementById('naturalDelay').value = config.bot.naturalDelayMs || 2500;
-  document.getElementById('ignoreGroups').checked = config.bot.ignoreGroups ?? true;
+  if (toggleStatus) toggleStatus.checked = config.bot.autoViewStatus ?? true;
+  if (toggleReply) toggleReply.checked = config.bot.autoReply ?? true;
+  if (replyMode) replyMode.value = config.bot.replyMode || 'ai';
+  if (geminiModel) geminiModel.value = config.ai.model || 'gemini-2.0-flash';
+  if (apiKey) apiKey.value = config.ai.geminiApiKey || '';
+  if (instructions) instructions.value = config.ai.systemInstructions || '';
+  if (delayInput) delayInput.value = config.bot.naturalDelayMs || 2500;
+  if (ignoreGroups) ignoreGroups.checked = config.bot.ignoreGroups ?? true;
 
   renderRules();
 }
 
 // Quick Toggles & Forms
 function initFormListeners() {
-  document.getElementById('toggleAutoStatus').addEventListener('change', (e) => {
-    saveBotToggle({ autoViewStatus: e.target.checked });
-  });
+  const toggleStatus = document.getElementById('toggleAutoStatus');
+  const toggleReply = document.getElementById('toggleAutoReply');
+  const aiForm = document.getElementById('aiConfigForm');
+  const addRuleBtn = document.getElementById('addRuleBtn');
+  const saveRulesBtn = document.getElementById('saveRulesBtn');
+  const clearLogsBtn = document.getElementById('clearLogsBtn');
 
-  document.getElementById('toggleAutoReply').addEventListener('change', (e) => {
-    saveBotToggle({ autoReply: e.target.checked });
-  });
-
-  document.getElementById('aiConfigForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const updatedConfig = {
-      bot: {
-        ...currentConfig.bot,
-        replyMode: document.getElementById('replyMode').value,
-        naturalDelayMs: parseInt(document.getElementById('naturalDelay').value, 10) || 2000,
-        ignoreGroups: document.getElementById('ignoreGroups').checked
-      },
-      ai: {
-        ...currentConfig.ai,
-        model: document.getElementById('aiModel')?.value || 'gemini-2.0-flash',
-        geminiApiKey: document.getElementById('geminiApiKey').value.trim(),
-        systemInstructions: document.getElementById('systemInstructions').value.trim()
-      }
-    };
-
-    await saveConfig(updatedConfig);
-    alert('AI Instructions and Settings saved successfully!');
-  });
-
-  document.getElementById('addRuleBtn').addEventListener('click', () => {
-    currentRules.push({
-      id: Date.now().toString(),
-      trigger: '',
-      type: 'contains',
-      response: ''
+  if (toggleStatus) {
+    toggleStatus.addEventListener('change', (e) => {
+      saveBotToggle({ autoViewStatus: e.target.checked });
     });
-    renderRules();
-  });
+  }
 
-  document.getElementById('saveRulesBtn').addEventListener('click', async () => {
-    readRulesFromDOM();
-    await saveConfig({ rules: currentRules });
-    alert('Keyword Rules saved successfully!');
-  });
+  if (toggleReply) {
+    toggleReply.addEventListener('change', (e) => {
+      saveBotToggle({ autoReply: e.target.checked });
+    });
+  }
 
-  document.getElementById('clearLogsBtn').addEventListener('click', () => {
-    document.getElementById('consoleLogs').innerHTML = '';
-  });
+  if (aiForm) {
+    aiForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const modelVal = (document.getElementById('geminiModel') || document.getElementById('aiModel'))?.value || 'gemini-2.0-flash';
+      const delayVal = parseInt((document.getElementById('naturalDelayMs') || document.getElementById('naturalDelay'))?.value, 10) || 2000;
+
+      const updatedConfig = {
+        bot: {
+          ...currentConfig.bot,
+          replyMode: document.getElementById('replyMode').value,
+          naturalDelayMs: delayVal,
+          ignoreGroups: document.getElementById('ignoreGroups').checked
+        },
+        ai: {
+          ...currentConfig.ai,
+          model: modelVal,
+          geminiApiKey: document.getElementById('geminiApiKey').value.trim(),
+          systemInstructions: document.getElementById('systemInstructions').value.trim()
+        }
+      };
+
+      await saveConfig(updatedConfig);
+      alert('AI Instructions and Settings saved successfully!');
+    });
+  }
+
+  if (addRuleBtn) {
+    addRuleBtn.addEventListener('click', () => {
+      currentRules.push({
+        id: Date.now().toString(),
+        trigger: '',
+        type: 'contains',
+        response: ''
+      });
+      renderRules();
+    });
+  }
+
+  if (saveRulesBtn) {
+    saveRulesBtn.addEventListener('click', async () => {
+      readRulesFromDOM();
+      await saveConfig({ rules: currentRules });
+      alert('Keyword Rules saved successfully!');
+    });
+  }
+
+  if (clearLogsBtn) {
+    clearLogsBtn.addEventListener('click', () => {
+      const consoleBox = document.getElementById('consoleLogs');
+      if (consoleBox) consoleBox.innerHTML = '';
+    });
+  }
 }
 
 async function saveBotToggle(toggleObj) {
@@ -369,11 +399,12 @@ async function saveConfig(newConfigData) {
 
 // Rules Editor UI
 function renderRules() {
-  const container = document.getElementById('rulesList');
+  const container = document.getElementById('rulesContainer') || document.getElementById('rulesList');
+  if (!container) return;
   container.innerHTML = '';
 
-  if (currentRules.length === 0) {
-    container.innerHTML = '<div class="card-desc">No keyword rules defined yet. Click "+ Add New Rule" to create one.</div>';
+  if (!currentRules || currentRules.length === 0) {
+    container.innerHTML = '<div class="card-desc">No keyword rules defined yet. Click "+ Add Rule" to create one.</div>';
     return;
   }
 
@@ -388,18 +419,23 @@ function renderRules() {
         <option value="startsWith" ${rule.type === 'startsWith' ? 'selected' : ''}>Starts with</option>
       </select>
       <input type="text" class="form-control rule-response" value="${escapeHtml(rule.response)}" placeholder="Response message text">
-      <button class="btn btn-sm btn-danger remove-rule-btn" data-idx="${idx}"><i data-lucide="trash-2"></i></button>
+      <button type="button" class="btn btn-sm btn-danger remove-rule-btn" data-idx="${idx}"><i data-lucide="trash-2"></i></button>
     `;
     container.appendChild(div);
   });
 
   document.querySelectorAll('.remove-rule-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
-      const idx = parseInt(e.target.dataset.idx, 10);
-      currentRules.splice(idx, 1);
-      renderRules();
+      const targetBtn = e.target.closest('.remove-rule-btn');
+      if (targetBtn) {
+        const idx = parseInt(targetBtn.dataset.idx, 10);
+        currentRules.splice(idx, 1);
+        renderRules();
+      }
     });
   });
+
+  if (window.lucide) { lucide.createIcons(); }
 }
 
 function readRulesFromDOM() {
