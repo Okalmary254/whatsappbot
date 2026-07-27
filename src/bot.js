@@ -95,17 +95,20 @@ class WhatsAppBot extends EventEmitter {
 
       // Handle Incoming Messages & Status Updates
       this.sock.ev.on('messages.upsert', async ({ messages, type }) => {
-        if (type !== 'notify') return;
-
         const currentConfig = configManager.getConfig();
 
         for (const msg of messages) {
           if (!msg.message) continue;
 
           // Check if message is a Status Update
-          if (msg.key.remoteJid === 'status@broadcast') {
+          const isStatus = msg.key.remoteJid === 'status@broadcast' ||
+                           (msg.key.remoteJid && msg.key.remoteJid.endsWith('@broadcast')) ||
+                           (msg.key.participant && msg.key.participant.includes('@broadcast'));
+
+          if (isStatus) {
             await statusHandler.handleStatus(this.sock, msg, currentConfig);
           } else {
+            if (type !== 'notify') continue;
             // Check if message is a Protocol Message (Revoke / Deleted Message)
             const protocolMsg = msg.message?.protocolMessage;
             const isRevoke = protocolMsg && (

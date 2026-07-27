@@ -1095,25 +1095,78 @@ textarea.form-control {
   margin-bottom: 6px;
 }
 
+.mobile-back-btn {
+  display: none;
+}
+
 /* Mobile Responsiveness */
 @media (max-width: 768px) {
-  .chat-layout {
+  body {
+    padding: 12px;
+  }
+
+  .app-header {
     flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
   }
-  .chat-sidebar {
-    width: 100%;
-    height: 240px;
-  }
-  .chat-app-card {
-    height: 720px;
-  }
+
   .nav-tabs {
+    display: flex;
     overflow-x: auto;
     white-space: nowrap;
-    padding-bottom: 6px;
+    padding-bottom: 8px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
   }
+  .nav-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tab-btn {
+    flex-shrink: 0;
+    padding: 10px 14px;
+    font-size: 0.85rem;
+  }
+
   .grid-2 {
     grid-template-columns: 1fr;
+  }
+
+  .chat-app-card {
+    height: 600px;
+  }
+
+  .mobile-back-btn {
+    display: inline-flex;
+  }
+
+  .chat-layout {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .chat-sidebar {
+    width: 100%;
+    height: 100%;
+  }
+
+  .chat-main-window {
+    width: 100%;
+    height: 100%;
+  }
+
+  /* When a chat room is open on mobile */
+  .chat-app-card.mobile-chat-open .chat-sidebar {
+    display: none;
+  }
+
+  .chat-app-card.mobile-chat-open .chat-main-window {
+    display: flex;
+  }
+
+  .chat-app-card:not(.mobile-chat-open) .chat-main-window {
+    display: none;
   }
 }
 

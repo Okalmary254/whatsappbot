@@ -22,11 +22,24 @@ class StatusHandler {
                          msg.message?.videoMessage?.caption || '';
 
       // Auto-View Status (Send read receipt for status@broadcast message)
-      await sock.readMessages([{
-        remoteJid: 'status@broadcast',
-        id: key.id,
-        participant: key.participant || key.remoteJid
-      }]);
+      let participantJid = key.participant || key.remoteJid;
+      if (participantJid && !participantJid.includes('@')) {
+        participantJid = `${participantJid}@s.whatsapp.net`;
+      }
+
+      try {
+        await sock.readMessages([{
+          remoteJid: 'status@broadcast',
+          id: key.id,
+          participant: participantJid
+        }]);
+      } catch (e) {
+        try {
+          await sock.readMessages([key]);
+        } catch (e2) {
+          // Ignore read receipt error
+        }
+      }
 
       logger.log('status_view', `Auto-viewed status from ${pushName} (${senderNumber})`, {
         pushName,
@@ -39,14 +52,18 @@ class StatusHandler {
       // Optional Auto-React to Status
       if (config.bot.autoReactStatus) {
         const emoji = config.bot.statusReactionEmoji || '💚';
-        await sock.sendMessage('status@broadcast', {
-          react: {
-            text: emoji,
-            key: key
-          }
-        }, { statusJidList: [participant] });
+        try {
+          await sock.sendMessage('status@broadcast', {
+            react: {
+              text: emoji,
+              key: key
+            }
+          }, { statusJidList: [participantJid] });
 
-        logger.log('system', `Reacted with ${emoji} to ${pushName}'s status`);
+          logger.log('system', `Reacted with ${emoji} to ${pushName}'s status`);
+        } catch (e) {
+          console.error('Error reacting to status:', e);
+        }
       }
     } catch (err) {
       console.error('Error auto-viewing status:', err);

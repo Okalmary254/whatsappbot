@@ -466,26 +466,37 @@ function renderLogs(logsObj) {
   const chatFeed = document.getElementById('chatFeed');
   const consoleBox = document.getElementById('consoleLogs');
 
-  statusFeed.innerHTML = '';
-  chatFeed.innerHTML = '';
-  consoleBox.innerHTML = '';
+  if (statusFeed) statusFeed.innerHTML = '';
+  if (chatFeed) chatFeed.innerHTML = '';
+  if (consoleBox) consoleBox.innerHTML = '';
 
   let statusCount = 0;
   let replyCount = 0;
 
-  (logsObj.all || []).forEach(log => {
+  const allLogs = logsObj.all || [];
+
+  [...allLogs].reverse().forEach(log => {
     appendLogToConsole(log);
     if (log.type === 'status_view') {
       appendStatusFeedItem(log);
       statusCount++;
-    } else if (log.type === 'auto_reply') {
+    } else if (log.type === 'auto_reply' || log.type === 'direct_message') {
       appendChatFeedItem(log);
       replyCount++;
     }
   });
 
-  document.getElementById('statusViewCount').innerText = statusCount;
-  document.getElementById('replyCount').innerText = replyCount;
+  if (statusFeed && statusFeed.children.length === 0) {
+    statusFeed.innerHTML = '<div class="empty-feed">No status stories viewed yet</div>';
+  }
+  if (chatFeed && chatFeed.children.length === 0) {
+    chatFeed.innerHTML = '<div class="empty-feed">No automated replies sent yet</div>';
+  }
+
+  const statusCountEl = document.getElementById('statusViewCount');
+  const replyCountEl = document.getElementById('replyCount');
+  if (statusCountEl) statusCountEl.innerText = statusCount;
+  if (replyCountEl) replyCountEl.innerText = replyCount;
 }
 
 function appendLog(log) {
@@ -601,6 +612,13 @@ function initDirectMessageForm() {
 function initChatUI() {
   const searchInput = document.getElementById('chatSearchInput');
   const chatSendForm = document.getElementById('chatSendForm');
+  const chatBackBtn = document.getElementById('chatBackBtn');
+
+  if (chatBackBtn) {
+    chatBackBtn.addEventListener('click', () => {
+      document.querySelector('.chat-app-card')?.classList.remove('mobile-chat-open');
+    });
+  }
 
   if (searchInput) {
     searchInput.addEventListener('input', (e) => {
@@ -712,6 +730,7 @@ function renderChatList(chats) {
 
 async function selectChat(jid, chatObj) {
   currentActiveChatJid = jid;
+  document.querySelector('.chat-app-card')?.classList.add('mobile-chat-open');
 
   document.querySelectorAll('.chat-item').forEach(el => {
     if (el.dataset.jid === jid) el.classList.add('active');
