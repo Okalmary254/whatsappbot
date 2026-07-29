@@ -8,6 +8,7 @@ const configManager = require('./configManager');
 const logger = require('./logger');
 const bot = require('./bot');
 const chatStore = require('./chatStore');
+const aiService = require('./aiService');
 
 const app = express();
 const server = http.createServer(app);
@@ -19,7 +20,11 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // API Endpoints
 app.get('/api/status', (req, res) => {
-  res.json(bot.getStatus());
+  const currentConfig = configManager.getConfig();
+  res.json({
+    ...bot.getStatus(),
+    isPaused: currentConfig.bot?.isPaused || false
+  });
 });
 
 app.get('/api/config', (req, res) => {
@@ -32,6 +37,34 @@ app.post('/api/config', (req, res) => {
     logger.log('system', 'Bot configuration updated via Web Dashboard');
     broadcast({ type: 'config_update', data: updated });
     res.json({ success: true, config: updated });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/pause', (req, res) => {
+  try {
+    const { isPaused } = req.body;
+    const newState = configManager.setPaused(isPaused);
+    logger.log('system', `Auto-reply state changed via API: ${newState ? 'PAUSED' : 'ACTIVE'}`);
+    broadcast({ type: 'config_update', data: configManager.getConfig() });
+    res.json({ success: true, isPaused: newState });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/status-digest', async (req, res) => {
+  try {
+    const todayStatuses = chatStore.getTodayStatusViews();
+    const config = configManager.getConfig();
+    const digestText = await aiService.generateStatusDigest(todayStatuses, config);
+    res.json({
+      success: true,
+      count: todayStatuses.length,
+      digest: digestText,
+      statuses: todayStatuses
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -117,7 +150,6 @@ app.get('/api/contacts', (req, res) => {
   }
 });
 
-
 app.get('/api/chats', (req, res) => {
   try {
     res.json(chatStore.getChats());
@@ -171,7 +203,10 @@ function broadcast(message) {
 wss.on('connection', (ws) => {
   ws.send(JSON.stringify({
     type: 'init',
-    status: bot.getStatus(),
+    status: {
+      ...bot.getStatus(),
+      isPaused: configManager.getConfig().bot?.isPaused || false
+    },
     config: configManager.getConfig(),
     logs: logger.getLogs(),
     chats: chatStore.getChats()

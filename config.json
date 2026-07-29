@@ -1,21 +1,32 @@
 {
   "bot": {
     "name": "WhatsApp AI Assistant",
+    "ownerName": "Alex",
     "autoViewStatus": true,
     "autoReactStatus": false,
     "statusReactionEmoji": "💚",
     "autoReply": true,
+    "isPaused": false,
     "replyMode": "ai",
     "ignoreGroups": true,
+    "replyInGroups": false,
+    "minDelayMs": 2000,
+    "maxDelayMs": 5000,
     "naturalDelayMs": 2500,
-    "allowedSenders": [],
-    "ignoredSenders": []
+    "whitelistMode": false,
+    "ignoredSenders": [],
+    "allowedSenders": []
   },
   "ai": {
     "provider": "gemini",
+    "anthropicApiKey": "",
+    "anthropicModel": "claude-3-5-sonnet-20241022",
+    "openaiApiKey": "",
+    "openaiModel": "gpt-4o-mini",
     "geminiApiKey": "AQ.Ab8RN6KxvFNX0lTkEXAA0zH_MigKHMf49tBR7I0ScSqb1CoTeA",
-    "model": "gemini-2.0-flash",
-    "systemInstructions": "You are a polite, helpful WhatsApp assistant. \nReply concisely and conversationally. Keep answers short and appropriate for instant messaging."
+    "geminiModel": "gemini-2.0-flash",
+    "systemInstructions": "You are a polite, helpful WhatsApp personal AI assistant for Alex. \nReply concisely, naturally, and conversationally. Keep answers short, friendly, and appropriate for instant messaging.",
+    "model": "gemini-2.0-flash"
   },
   "rules": [
     {
@@ -39,7 +50,7 @@
     {
       "id": "1785075756418",
       "trigger": "hi",
-      "type": "contains",
+      "type": "exact",
       "response": "Hello! 👋 I am  Jean, an automated assistant developed by Jean Marie. How can I help you today?"
     }
   ]

@@ -10,6 +10,11 @@ baileys_auth_info/
 *.session
 *.json.bak
 
+# SQLite & Data files
+data/*.sqlite
+data/*.sqlite-journal
+data/*.db
+
 # Environment & local secret files
 .env
 .env.local

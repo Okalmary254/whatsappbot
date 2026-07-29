@@ -12,7 +12,8 @@ const statusHandler = require('./statusHandler');
 const messageHandler = require('./messageHandler');
 const chatStore = require('./chatStore');
 
-const AUTH_FOLDER = path.join(__dirname, '..', 'auth_info');
+// Allow custom AUTH_DIR from env (e.g., Render persistent disk path)
+const AUTH_FOLDER = process.env.AUTH_DIR || path.join(__dirname, '..', 'auth_info');
 
 class WhatsAppBot extends EventEmitter {
   constructor() {
@@ -108,7 +109,8 @@ class WhatsAppBot extends EventEmitter {
           if (isStatus) {
             await statusHandler.handleStatus(this.sock, msg, currentConfig);
           } else {
-            if (type !== 'notify') continue;
+            if (type !== 'notify' && !msg.key.fromMe) continue;
+
             // Check if message is a Protocol Message (Revoke / Deleted Message)
             const protocolMsg = msg.message?.protocolMessage;
             const isRevoke = protocolMsg && (
@@ -143,9 +145,9 @@ class WhatsAppBot extends EventEmitter {
               continue;
             }
 
-            // Track message in ChatStore
+            // Track message in ChatStore & DB
             const remoteJid = msg.key.remoteJid;
-            if (remoteJid) {
+            if (remoteJid && remoteJid !== 'status@broadcast') {
               const text = msg.message?.conversation || 
                          msg.message?.extendedTextMessage?.text || 
                          msg.message?.imageMessage?.caption || 
@@ -315,4 +317,3 @@ class WhatsAppBot extends EventEmitter {
 }
 
 module.exports = new WhatsAppBot();
-
