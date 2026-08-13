@@ -5,8 +5,8 @@ const logger = require('./logger');
 
 class AIService {
   normalizeGeminiModel(model) {
-    if (!model || model === 'gemini-2.5-flash') {
-      return 'gemini-2.0-flash';
+    if (!model || model.includes('gemini-2')) {
+      return 'gemini-1.5-flash';
     }
     return model;
   }
@@ -16,12 +16,18 @@ class AIService {
     const rules = config.rules || [];
     const mode = config.bot?.replyMode || "ai";
 
-    const anthropicKey = (aiConfig.anthropicApiKey || process.env.ANTHROPIC_API_KEY || '').trim();
+    const anthropicKey = (aiConfig.anthropicApiKey || process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY || '').trim();
     const openaiKey = (aiConfig.openaiApiKey || process.env.OPENAI_API_KEY || '').trim();
     const geminiKey = (aiConfig.geminiApiKey || process.env.GEMINI_API_KEY || '').trim();
 
     // Select provider based on config or available API keys
     let provider = (aiConfig.provider || process.env.AI_PROVIDER || 'auto').toLowerCase();
+    if (provider === 'claude') provider = 'anthropic';
+
+    // If the chosen provider lacks a key, fallback to auto
+    if (provider === 'anthropic' && !anthropicKey) provider = 'auto';
+    if (provider === 'openai' && !openaiKey) provider = 'auto';
+    if (provider === 'gemini' && !geminiKey) provider = 'auto';
 
     if (provider === 'auto') {
       if (anthropicKey) provider = 'anthropic';
@@ -59,7 +65,7 @@ class AIService {
       } else if (provider === 'openai' && openaiKey) {
         return await this.generateOpenAI(incomingText, chatHistory, openaiKey, aiConfig.openaiModel || 'gpt-4o-mini', systemInstruction);
       } else if ((provider === 'gemini' || geminiKey) && geminiKey) {
-        return await this.generateGemini(incomingText, chatHistory, geminiKey, aiConfig.geminiModel || 'gemini-2.0-flash', systemInstruction);
+        return await this.generateGemini(incomingText, chatHistory, geminiKey, aiConfig.geminiModel || 'gemini-1.5-flash', systemInstruction);
       } else if (anthropicKey) {
         return await this.generateAnthropic(incomingText, chatHistory, anthropicKey, aiConfig.anthropicModel || 'claude-3-5-sonnet-20241022', systemInstruction);
       } else if (openaiKey) {
@@ -155,7 +161,7 @@ class AIService {
   async generateGemini(incomingText, chatHistory, apiKey, model, systemInstruction) {
     const preferredModel = this.normalizeGeminiModel(model);
     const modelsToTry = [preferredModel];
-    if (preferredModel === 'gemini-2.0-flash') modelsToTry.push('gemini-2.0-flash-lite');
+    if (preferredModel === 'gemini-1.5-flash') modelsToTry.push('gemini-1.5-pro');
 
     // Build prompt context with conversation memory
     let fullPrompt = incomingText;
@@ -186,6 +192,7 @@ class AIService {
         }
       } catch (err) {
         console.error(`Gemini Error (${modelName}):`, err.message);
+        logger.log('error', `❌ Gemini Error (${modelName}): ${err.message}`);
       }
     }
     return null;

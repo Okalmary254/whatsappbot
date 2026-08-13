@@ -40,12 +40,12 @@ function getEnvConfig() {
     },
     ai: {
       provider: process.env.AI_PROVIDER || "auto", // "auto", "anthropic", "openai", "gemini"
-      anthropicApiKey: process.env.ANTHROPIC_API_KEY || "",
+      anthropicApiKey: process.env.CLAUDE_API_KEY || process.env.ANTHROPIC_API_KEY || "",
       anthropicModel: process.env.ANTHROPIC_MODEL || "claude-3-5-sonnet-20241022",
       openaiApiKey: process.env.OPENAI_API_KEY || "",
       openaiModel: process.env.OPENAI_MODEL || "gpt-4o-mini",
       geminiApiKey: process.env.GEMINI_API_KEY || "",
-      geminiModel: process.env.GEMINI_MODEL || "gemini-2.0-flash",
+      geminiModel: process.env.GEMINI_MODEL || "gemini-1.5-flash",
       systemInstructions: `You are a polite, helpful WhatsApp personal AI assistant for ${process.env.ASSISTANT_OWNER_NAME || 'your owner'}. 
 Reply concisely, naturally, and conversationally. Keep answers short, friendly, and appropriate for instant messaging.`
     },
@@ -89,8 +89,8 @@ class ConfigManager extends EventEmitter {
         };
 
         // Normalize legacy model names if present
-        if (merged.ai.geminiModel === 'gemini-2.5-flash') {
-          merged.ai.geminiModel = 'gemini-2.0-flash';
+        if (merged.ai.geminiModel && merged.ai.geminiModel.includes('gemini-2')) {
+          merged.ai.geminiModel = 'gemini-1.5-flash';
         }
 
         return merged;

@@ -39,7 +39,10 @@ class WhatsAppBot extends EventEmitter {
         auth: state,
         logger: pino({ level: 'silent' }),
         printQRInTerminal: false,
-        browser: Browsers.macOS('Desktop')
+        browser: ['Ubuntu', 'Chrome', '20.0.04'],
+        markOnlineOnConnect: false,
+        syncFullHistory: false,
+        retryRequestDelayMs: 2000
       });
 
       this.sock.ev.on('creds.update', saveCreds);
@@ -109,8 +112,6 @@ class WhatsAppBot extends EventEmitter {
           if (isStatus) {
             await statusHandler.handleStatus(this.sock, msg, currentConfig);
           } else {
-            if (type !== 'notify' && !msg.key.fromMe) continue;
-
             // Check if message is a Protocol Message (Revoke / Deleted Message)
             const protocolMsg = msg.message?.protocolMessage;
             const isRevoke = protocolMsg && (
@@ -118,6 +119,18 @@ class WhatsAppBot extends EventEmitter {
               protocolMsg.type === 1 || 
               protocolMsg.type === 'REVOKE'
             );
+
+            if (!isRevoke && type !== 'notify' && !msg.key.fromMe) continue;
+
+            // --- WHATSY MODERATION INJECTION ---
+            try {
+              const moderation = require('./moderation');
+              const modHandled = await moderation.onIncomingMessage(this.sock, msg);
+              if (modHandled && modHandled !== 'revoke') continue;
+            } catch (err) {
+              console.error('[Moderation] Error handling message:', err);
+            }
+            // -----------------------------------
 
             if (isRevoke && protocolMsg.key) {
               const targetJid = protocolMsg.key.remoteJid || msg.key.remoteJid;
@@ -171,6 +184,16 @@ class WhatsAppBot extends EventEmitter {
 
             await messageHandler.handleMessage(this.sock, msg, currentConfig);
           }
+        }
+      });
+
+      // Handle Group Participants Update (Welcome/Goodbye)
+      this.sock.ev.on('group-participants.update', async (update) => {
+        try {
+          const moderation = require('./moderation');
+          await moderation.handleParticipantsUpdate(this.sock, update);
+        } catch (err) {
+          console.error('[Moderation] Error handling participants update:', err);
         }
       });
 
