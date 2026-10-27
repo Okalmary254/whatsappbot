@@ -3,7 +3,7 @@ const { startServer } = require('./server');
 const bot = require('./bot');
 
 console.log('----------------------------------------------------');
-console.log('🤖 Starting WhatsApp Auto Status Viewer & AI Chatbot');
+console.log('🤖 Starting WhatsApp Groq Personal AI Agent');
 console.log('----------------------------------------------------');
 
 // Start Express Web Server
@@ -13,8 +13,13 @@ startServer();
 bot.start();
 
 // Handle graceful shutdown
-process.on('SIGINT', async () => {
-  console.log('\nShutting down WhatsApp Bot...');
-  await bot.logout();
+let shuttingDown = false;
+async function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log('\nReceived ' + signal + '; closing WhatsApp connection without logging out...');
+  try { await bot.close(); } catch (err) { console.error('Shutdown error:', err.message); }
   process.exit(0);
-});
+}
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
