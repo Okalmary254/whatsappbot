@@ -1,10 +1,16 @@
-require('dotenv').config();
+const path = require('path');
+
+// Load the repository-root .env regardless of the directory used to launch Node.
+// On Render, dashboard environment variables are already present in process.env.
+require('dotenv').config({ path: path.resolve(__dirname, '..', '.env') });
 const { startServer } = require('./server');
 const bot = require('./bot');
 
 console.log('----------------------------------------------------');
 console.log('🤖 Starting WhatsApp Groq Personal AI Agent');
 console.log('----------------------------------------------------');
+console.log('[Groq] GROQ_API_KEY:', process.env.GROQ_API_KEY?.trim() ? 'detected' : 'MISSING');
+console.log('[Groq] Model:', process.env.GROQ_MODEL || 'openai/gpt-oss-120b');
 
 // Start Express Web Server
 startServer();
