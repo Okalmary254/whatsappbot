@@ -214,11 +214,11 @@
             <div class="controls-list">
               <div class="control-item">
                 <div>
-                  <div class="control-title">Auto Status Viewer</div>
-                  <div class="control-desc">Automatically view & mark incoming status stories as read</div>
+                  <div class="control-title">Status Viewer Disabled</div>
+                  <div class="control-desc">Status viewing is disabled in this personal-agent build.</div>
                 </div>
                 <label class="switch">
-                  <input type="checkbox" id="toggleAutoStatus" checked>
+                  <input type="checkbox" id="toggleAutoStatus" disabled>
                   <span class="slider"></span>
                 </label>
               </div>
@@ -226,7 +226,7 @@
               <div class="control-item">
                 <div>
                   <div class="control-title">Auto AI Chat Responder</div>
-                  <div class="control-desc">Automatically reply to incoming chat messages using Gemini AI</div>
+                  <div class="control-desc">Automatically reply to incoming chat messages using Groq AI</div>
                 </div>
                 <label class="switch">
                   <input type="checkbox" id="toggleAutoReply" checked>
@@ -345,29 +345,16 @@
             <div class="form-group">
               <label for="replyMode">Reply Mode</label>
               <select id="replyMode" class="form-control">
-                <option value="ai">AI Model (Google Gemini)</option>
-                <option value="hybrid">Hybrid (Custom Rules first, then Gemini AI)</option>
+                <option value="ai">AI Model (Groq)</option>
+                <option value="hybrid">Hybrid (Custom Rules first, then Groq AI)</option>
                 <option value="rules">Keyword Rules Only (No AI)</option>
               </select>
             </div>
 
-            <div class="grid grid-2">
-              <div class="form-group">
-                <label for="geminiApiKey">Google Gemini API Key</label>
-                <input type="password" id="geminiApiKey" class="form-control" placeholder="AIzaSy..." />
-                <small class="form-hint">Get a free key from <a href="https://aistudio.google.com" target="_blank">Google AI Studio</a></small>
-              </div>
-
-              <div class="form-group">
-                <label for="geminiModel">Gemini Model</label>
-                <select id="geminiModel" class="form-control">
-                  <option value="gemini-2.0-flash">gemini-2.0-flash (Recommended, Fast & Free)</option>
-                  <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite (Lightweight & High Quota)</option>
-                  <option value="gemini-1.5-flash">gemini-1.5-flash (Standard Flash)</option>
-                  <option value="gemini-1.5-pro">gemini-1.5-pro (Advanced Reasoning)</option>
-                </select>
-                <small class="form-hint">Select the Google AI model to generate auto responses.</small>
-              </div>
+            <div class="form-group">
+              <label for="groqModel">Groq Model</label>
+              <input type="text" id="groqModel" class="form-control" value="openai/gpt-oss-120b" placeholder="openai/gpt-oss-120b" />
+              <small class="form-hint">Set GROQ_API_KEY in your server-side .env file. The API key is never stored in the dashboard configuration.</small>
             </div>
 
             <div class="form-group">
