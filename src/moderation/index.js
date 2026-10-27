@@ -2,7 +2,8 @@ const { handleAntilink } = require('./antilink');
 const { handleAntimention } = require('./antimention');
 const { cacheIncomingMessage, handleRevoke } = require('./antidelete');
 const { handleParticipantsUpdate } = require('./welcome');
-const { handleCommand } = require('./commands');
+const { handleCommand, isAdminCommand } = require('./commands');
+const { getGroupSettings } = require('./store');
 const groupAdminCache = new Map();
 const ADMIN_CACHE_TTL_MS = 60 * 1000;
 
@@ -19,6 +20,10 @@ async function getSenderPrivileges(sock, msg) {
 
   let isAdmin = false;
   if (remoteJid.endsWith('@g.us')) {
+    const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '';
+    const settings = getGroupSettings(remoteJid);
+    const needsAdminLookup = isAdminCommand(text) || settings.antilink || settings.antimention;
+    if (!needsAdminLookup) return { isAdmin: false, isBotAdmin };
     try {
       let meta = groupAdminCache.get(remoteJid);
       if (!meta || Date.now() - meta.cachedAt > ADMIN_CACHE_TTL_MS) {
