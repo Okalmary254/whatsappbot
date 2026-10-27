@@ -10,7 +10,7 @@ function parseNumberList(value) {
 
 function getEnvConfig() {
   const minDelay = parseInt(process.env.REPLY_DELAY_MIN_MS, 10) || 2000;
-  const maxDelay = parseInt(process.env.REPLY_DELAY_MAX_MS, 10) || 5000;
+  const maxDelayMs = parseInt(process.env.REPLY_DELAY_MAX_MS, 10) || 5000;
   const replyInGroups = process.env.REPLY_IN_GROUPS === 'true';
   const whitelistMode = process.env.WHITELIST_MODE === 'true';
   const ownerName = process.env.ASSISTANT_OWNER_NAME || 'John';
