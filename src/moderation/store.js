@@ -1,7 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 
-const DB_PATH = process.env.WHATSY_DB_PATH || path.join(__dirname, '..', '..', 'data', 'moderation.json');
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', '..');
+const DB_PATH = process.env.WHATSY_DB_PATH || path.join(DATA_DIR, 'data', 'moderation.json');
 
 function ensureDB() {
   const dir = path.dirname(DB_PATH);

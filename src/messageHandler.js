@@ -2,6 +2,8 @@ const logger = require('./logger');
 const aiService = require('./aiService');
 const chatStore = require('./chatStore');
 const configManager = require('./configManager');
+const lastReplyAt = new Map();
+const SENDER_COOLDOWN_MS = Math.max(1000, Number(process.env.SENDER_COOLDOWN_MS) || 5000);
 
 class MessageHandler {
   async handleMessage(sock, msg, config) {
@@ -28,8 +30,9 @@ class MessageHandler {
     // -------------------------------------------------------------
     // OWNER COMMANDS (Sent from own number / self or owner account)
     // -------------------------------------------------------------
+    const selfJid = sock.user?.id ? (sock.user.id.split(':')[0].split('@')[0] + '@s.whatsapp.net') : null;
     if (key.fromMe || senderNumber === sock.user?.id?.split(':')[0]?.split('@')[0]) {
-      if (trimmedText.startsWith('/')) {
+      if (trimmedText.startsWith('/') && key.fromMe && remoteJid === selfJid) {
         await this.handleOwnerCommand(sock, remoteJid, trimmedText, msg, config);
         return;
       }
@@ -67,6 +70,17 @@ class MessageHandler {
       }
     }
 
+    const now = Date.now();
+    const previousReplyAt = lastReplyAt.get(senderNumber) || 0;
+    if (now - previousReplyAt < SENDER_COOLDOWN_MS) {
+      logger.log('system', 'Rate limited incoming message from ' + senderNumber + '.');
+      return;
+    }
+    lastReplyAt.set(senderNumber, now);
+    if (lastReplyAt.size > 5000) {
+      for (const [number, at] of lastReplyAt) if (now - at > 60 * 60 * 1000) lastReplyAt.delete(number);
+    }
+
     logger.log('incoming_message', `Received message from ${pushName} (${senderNumber}): "${incomingText}"`, {
       pushName,
       senderNumber,
@@ -80,18 +94,12 @@ class MessageHandler {
       const maxDelay = config.bot.maxDelayMs || 5000;
       const randomDelay = Math.floor(Math.random() * (maxDelay - minDelay + 1)) + minDelay;
 
-      // Simulate typing presence for natural interaction
-      await sock.sendPresenceUpdate('composing', remoteJid);
-      
-      if (randomDelay > 0) {
-        await new Promise(resolve => setTimeout(resolve, randomDelay));
-      }
-
-      // Fetch per-contact conversation history for context memory
+      // Start AI generation immediately so the typing delay overlaps model latency.
       const chatHistory = chatStore.getMessages(remoteJid);
-
-      // Generate AI or rule response with conversation history context
-      const responseText = await aiService.generateResponse(incomingText, chatHistory, config);
+      const responsePromise = aiService.generateResponse(incomingText, chatHistory, config);
+      await sock.sendPresenceUpdate('composing', remoteJid);
+      if (randomDelay > 0) await new Promise(resolve => setTimeout(resolve, randomDelay));
+      const responseText = await responsePromise;
 
       if (responseText) {
         // Send reply back on WhatsApp

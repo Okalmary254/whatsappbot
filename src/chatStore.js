@@ -1,5 +1,7 @@
 const EventEmitter = require('events');
-const { run, all, get } = require('./db');
+const { run, all, get, ready } = require('./db');
+const RETENTION_DAYS = Math.max(1, Number(process.env.MESSAGE_RETENTION_DAYS) || 30);
+const MAX_MESSAGES_PER_CHAT = Math.max(100, Number(process.env.MAX_MESSAGES_PER_CHAT) || 500);
 
 class ChatStore extends EventEmitter {
   constructor() {
@@ -17,6 +19,9 @@ class ChatStore extends EventEmitter {
 
   async loadFromDb() {
     try {
+      await ready;
+      const retentionCutoff = Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000;
+      await run('DELETE FROM messages WHERE timestamp < ?', [retentionCutoff]);
       // Load chats
       const dbChats = await all(`SELECT * FROM chats ORDER BY lastTimestamp DESC`);
       for (const c of dbChats) {
@@ -33,7 +38,7 @@ class ChatStore extends EventEmitter {
       }
 
       // Load messages
-      const dbMsgs = await all(`SELECT * FROM messages ORDER BY timestamp ASC`);
+      const dbMsgs = await all(`SELECT * FROM messages WHERE timestamp >= ? ORDER BY timestamp ASC`, [retentionCutoff]);
       for (const m of dbMsgs) {
         if (!this.messages.has(m.jid)) {
           this.messages.set(m.jid, []);
@@ -48,6 +53,7 @@ class ChatStore extends EventEmitter {
           isDeleted: Boolean(m.isDeleted),
           deletedAt: m.deletedAt
         });
+        if (list.length > MAX_MESSAGES_PER_CHAT) list.splice(0, list.length - MAX_MESSAGES_PER_CHAT);
       }
 
       // Load status views
@@ -143,8 +149,8 @@ class ChatStore extends EventEmitter {
     // Avoid duplicate message IDs
     if (!chatMessages.some(m => m.id === msgObj.id)) {
       chatMessages.push(msgObj);
-      if (chatMessages.length > 200) {
-        chatMessages.shift();
+      if (chatMessages.length > MAX_MESSAGES_PER_CHAT) {
+        chatMessages.splice(0, chatMessages.length - MAX_MESSAGES_PER_CHAT);
       }
 
       // Save message to DB

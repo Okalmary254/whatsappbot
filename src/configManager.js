@@ -2,7 +2,15 @@ const fs = require('fs');
 const path = require('path');
 const EventEmitter = require('events');
 
-const CONFIG_PATH = path.join(__dirname, '..', 'config.json');
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..');
+const CONFIG_PATH = path.join(DATA_DIR, 'config.json');
+if (!fs.existsSync(CONFIG_PATH)) {
+  const legacyPath = path.join(__dirname, '..', 'config.json');
+  if (legacyPath !== CONFIG_PATH && fs.existsSync(legacyPath)) {
+    try { fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true }); fs.copyFileSync(legacyPath, CONFIG_PATH); }
+    catch (err) { console.error('Could not migrate config.json:', err.message); }
+  }
+}
 
 function parseNumberList(val) {
   if (!val) return [];

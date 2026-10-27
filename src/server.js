@@ -2,7 +2,7 @@ const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
 const path = require('path');
-const cors = require('cors');
+const crypto = require('crypto');
 
 const configManager = require('./configManager');
 const logger = require('./logger');
@@ -11,10 +11,45 @@ const chatStore = require('./chatStore');
 
 const app = express();
 const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
+const dashboardPassword = process.env.DASHBOARD_PASSWORD || '';
+const dashboardHost = process.env.HOST || '127.0.0.1';
+const wss = new WebSocket.Server({ noServer: true });
 
-app.use(cors());
-app.use(express.json());
+function sameOrigin(req) {
+  const origin = req.headers.origin;
+  if (!origin) return true;
+  try { return new URL(origin).host === req.headers.host; } catch (_) { return false; }
+}
+
+function authorizeRequest(req) {
+  if (dashboardPassword) {
+    const auth = req.headers.authorization || '';
+    if (!auth.startsWith('Basic ')) return false;
+    let decoded;
+    try { decoded = Buffer.from(auth.slice(6), 'base64').toString('utf8'); } catch (_) { return false; }
+    const separator = decoded.indexOf(':');
+    if (separator < 0) return false;
+    const supplied = Buffer.from(decoded.slice(separator + 1));
+    const expected = Buffer.from(dashboardPassword);
+    return supplied.length === expected.length && crypto.timingSafeEqual(supplied, expected);
+  }
+  const address = req.socket.remoteAddress || '';
+  const isLoopback = address === '127.0.0.1' || address === '::1' || address === '::ffff:127.0.0.1';
+  return isLoopback && dashboardHost === '127.0.0.1';
+}
+
+app.use((req, res, next) => {
+  if (!sameOrigin(req)) return res.status(403).send('Cross-origin requests are not allowed.');
+  if (!authorizeRequest(req)) {
+    if (!dashboardPassword && dashboardHost !== '127.0.0.1') {
+      return res.status(503).send('Set DASHBOARD_PASSWORD before exposing the dashboard beyond localhost.');
+    }
+    res.set('WWW-Authenticate', 'Basic realm="WhatsApp Dashboard", charset="UTF-8"');
+    return res.status(401).send('Authentication required.');
+  }
+  next();
+});
+app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // API Endpoints
@@ -26,16 +61,26 @@ app.get('/api/status', (req, res) => {
   });
 });
 
+function publicConfig() {
+  const config = JSON.parse(JSON.stringify(configManager.getConfig()));
+  if (config.ai) {
+    delete config.ai.groqApiKey;
+    delete config.ai.apiKey;
+    delete config.ai.geminiApiKey;
+  }
+  return config;
+}
+
 app.get('/api/config', (req, res) => {
-  res.json(configManager.getConfig());
+  res.json(publicConfig());
 });
 
 app.post('/api/config', (req, res) => {
   try {
     const updated = configManager.updateConfig(req.body);
     logger.log('system', 'Bot configuration updated via Web Dashboard');
-    broadcast({ type: 'config_update', data: updated });
-    res.json({ success: true, config: updated });
+    broadcast({ type: 'config_update', data: publicConfig() });
+    res.json({ success: true, config: publicConfig() });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -46,7 +91,7 @@ app.post('/api/pause', (req, res) => {
     const { isPaused } = req.body;
     const newState = configManager.setPaused(isPaused);
     logger.log('system', `Auto-reply state changed via API: ${newState ? 'PAUSED' : 'ACTIVE'}`);
-    broadcast({ type: 'config_update', data: configManager.getConfig() });
+    broadcast({ type: 'config_update', data: publicConfig() });
     res.json({ success: true, isPaused: newState });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -182,6 +227,16 @@ function broadcast(message) {
   });
 }
 
+// Authenticate WebSocket upgrades as well as HTTP requests.
+server.on('upgrade', (req, socket, head) => {
+  if (!sameOrigin(req) || !authorizeRequest(req)) {
+    socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');
+    socket.destroy();
+    return;
+  }
+  wss.handleUpgrade(req, socket, head, ws => wss.emit('connection', ws, req));
+});
+
 // WebSocket Connection Handler
 wss.on('connection', (ws) => {
   ws.send(JSON.stringify({
@@ -190,7 +245,7 @@ wss.on('connection', (ws) => {
       ...bot.getStatus(),
       isPaused: configManager.getConfig().bot?.isPaused || false
     },
-    config: configManager.getConfig(),
+    config: publicConfig(),
     logs: logger.getLogs(),
     chats: chatStore.getChats()
   }));
@@ -210,10 +265,11 @@ chatStore.on('chatUpdated', (data) => {
 });
 
 const PORT = process.env.PORT || 3000;
+const HOST = process.env.HOST || '127.0.0.1';
 
 function startServer() {
-  server.listen(PORT, () => {
-    console.log(`\n🚀 Web Dashboard running at: http://localhost:${PORT}`);
+  server.listen(PORT, HOST, () => {
+    console.log(`\n🚀 Web Dashboard running at: http://${HOST}:${PORT}`);
   });
 }
 
