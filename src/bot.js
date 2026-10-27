@@ -12,7 +12,8 @@ const messageHandler = require('./messageHandler');
 const chatStore = require('./chatStore');
 
 // Allow custom AUTH_DIR from env (e.g., Render persistent disk path)
-const AUTH_FOLDER = process.env.AUTH_DIR || path.join(__dirname, '..', 'auth_info');
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..');
+const AUTH_FOLDER = process.env.AUTH_DIR || path.join(DATA_DIR, 'auth_info');
 
 class WhatsAppBot extends EventEmitter {
   constructor() {
@@ -23,9 +24,13 @@ class WhatsAppBot extends EventEmitter {
     this.qrDataUrl = null;
     this.pairingCode = null;
     this.userInfo = null;
+    this.isShuttingDown = false;
+    this.reconnectTimer = null;
+    this.seenMessageIds = new Map();
   }
 
   async start() {
+    if (this.isShuttingDown) return;
     try {
       this.status = 'connecting';
       this.emitStatus('connecting');
@@ -77,9 +82,14 @@ class WhatsAppBot extends EventEmitter {
           this.userInfo = null;
           this.emitStatus('disconnected');
 
-          if (shouldReconnect) {
+          if (shouldReconnect && !this.isShuttingDown) {
             logger.log('system', 'Reconnecting to WhatsApp...');
-            setTimeout(() => this.start(), 3000);
+            if (lastDisconnect?.error?.output?.statusCode === DisconnectReason.connectionReplaced) {
+              logger.log('error', 'WhatsApp connection was replaced elsewhere; automatic reconnect stopped.');
+              return;
+            }
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = setTimeout(() => this.start(), 3000);
           } else {
             logger.log('error', 'Logged out from WhatsApp. Clear auth_info folder to generate new QR or Pairing Code.');
           }
@@ -102,13 +112,25 @@ class WhatsAppBot extends EventEmitter {
 
         for (const msg of messages) {
           if (!msg.message) continue;
+          const messageId = msg.key?.id;
+          if (messageId) {
+            if (this.seenMessageIds.has(messageId)) continue;
+            this.seenMessageIds.set(messageId, Date.now());
+            if (this.seenMessageIds.size > 5000) {
+              const cutoff = Date.now() - 6 * 60 * 60 * 1000;
+              for (const [id, seenAt] of this.seenMessageIds) {
+                if (seenAt < cutoff || this.seenMessageIds.size > 4000) this.seenMessageIds.delete(id);
+                else break;
+              }
+            }
+          }
 
           // Check if message is a Status Update
           const isStatus = msg.key.remoteJid === 'status@broadcast' ||
                            (msg.key.remoteJid && msg.key.remoteJid.endsWith('@broadcast')) ||
                            (msg.key.participant && msg.key.participant.includes('@broadcast'));
 
-          if (isStatus) {
+          if (isStatus || msg.key.remoteJid?.endsWith('@broadcast')) {
             // Status viewing is intentionally disabled in this personal-agent build.
             continue;
           } else {
@@ -182,7 +204,9 @@ class WhatsAppBot extends EventEmitter {
               }
             }
 
-            await messageHandler.handleMessage(this.sock, msg, currentConfig);
+            // Do not block the upsert loop while AI generation or typing delays run.
+            Promise.resolve(messageHandler.handleMessage(this.sock, msg, currentConfig))
+              .catch(err => console.error('Message handler failed:', err));
           }
         }
       });
@@ -228,6 +252,21 @@ class WhatsAppBot extends EventEmitter {
       console.error('Error requesting pairing code from Baileys:', err);
       throw new Error(err.message || 'Failed to request pairing code from WhatsApp.');
     }
+  }
+
+  async close() {
+    this.isShuttingDown = true;
+    clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
+    if (this.sock) {
+      const socket = this.sock;
+      this.sock = null;
+      try {
+        if (typeof socket.end === 'function') socket.end(new Error('Application shutting down'));
+      } catch (_) {}
+    }
+    this.status = 'disconnected';
+    this.emitStatus('disconnected');
   }
 
   async resetSession() {
