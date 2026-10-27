@@ -12,7 +12,7 @@ WhatsApp personal assistant built with Baileys, an Express web dashboard, SQLite
 - Status viewing and status digest functionality are disabled.
 
 ## Setup
-Requires Node.js 18+ and a Groq API key.
+Requires Node.js 20+ and a Groq API key.
 
 ```bash
 git clone https://github.com/Okalmary254/whatsappbot.git
@@ -45,7 +45,7 @@ Open http://localhost:3000 and link WhatsApp using the QR code or pairing flow.
 | `AUTH_DIR` | WhatsApp authentication directory | `auth_info` |
 | `PORT` | Dashboard port | `3000` |
 
-The dashboard allows changing the model and system instructions. Set the Groq key only in the server environment, not in dashboard settings or source files.
+The dashboard allows changing the model and system instructions. Set the Groq key only in the server environment, not in dashboard settings or source files. The dashboard uses HTTP Basic Authentication when `DASHBOARD_PASSWORD` is set.
 
 ## Owner commands
 - `/pause` — pause automatic replies.
@@ -54,7 +54,7 @@ The dashboard allows changing the model and system instructions. Set the Groq ke
 - `/status` or `/help` — view bot status and commands.
 
 ## Deployment
-Use a host with persistent storage for the WhatsApp auth directory and SQLite database. Configure `GROQ_API_KEY` in the host's environment settings. Protect the dashboard with authentication or network restrictions before exposing it to the internet.
+Use a **Web Service** (not a Background Worker) if you need the dashboard over HTTP. Attach a persistent disk and set `DATA_DIR` to its mount path (for example `/var/data`). This keeps `auth_info/`, `config.json`, `data/bot_database.sqlite`, and `data/moderation.json` on persistent storage. Set `HOST=0.0.0.0`, `DASHBOARD_PASSWORD` to a long unique password, and `GROQ_API_KEY` in the host's environment settings. Do not expose the service remotely without `DASHBOARD_PASSWORD`; without a password the dashboard is restricted to localhost.
 
 ## Security
 Never commit `.env`, WhatsApp session files, or API keys. If a key was committed previously, revoke it and create a replacement; removing it from the latest file does not remove it from Git history.
