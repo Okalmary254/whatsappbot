@@ -27,6 +27,7 @@ test('dashboard protects HTTP routes and WebSocket upgrades', () => {
   assert.match(server, /DASHBOARD_PASSWORD/);
   assert.match(server, /server\.on\('upgrade'/);
   assert.match(server, /WWW-Authenticate/);
+  assert.match(server, /function sameOrigin/);
   assert.doesNotMatch(server, /app\.use\(cors\(\)\)/);
 });
 
