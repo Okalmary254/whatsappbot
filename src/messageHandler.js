@@ -166,11 +166,9 @@ class MessageHandler {
         `• *Delay Range*: ${config.bot.minDelayMs}ms - ${config.bot.maxDelayMs}ms\n` +
         `• *Group Replies*: ${config.bot.ignoreGroups ? 'Disabled' : 'Enabled'}\n` +
         `• *Whitelist Mode*: ${config.bot.whitelistMode ? 'ENABLED' : 'Disabled'}\n` +
-        `• *Statuses Seen Today*: ${chatStore.getTodayStatusViews().length}\n\n` +
         `*Commands Available*:\n` +
         `• \`/pause\` - Pause auto-replies\n` +
         `• \`/resume\` - Resume auto-replies\n` +
-        `• \`/digest\` - Generate status updates summary\n` +
         `• \`/deleted\` - View restored deleted messages\n` +
         `• \`/status\` - View bot configuration`;
 
