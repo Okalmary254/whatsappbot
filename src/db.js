@@ -2,7 +2,8 @@ const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
 
-const DB_PATH = path.join(__dirname, '..', 'data', 'bot_database.sqlite');
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..');
+const DB_PATH = path.join(DATA_DIR, 'data', 'bot_database.sqlite');
 
 // Ensure data directory exists
 const dataDir = path.dirname(DB_PATH);
@@ -46,7 +47,7 @@ function all(sql, params = []) {
   });
 }
 
-// Initialize tables
+// Initialize tables; callers await ready before reading persisted state.
 async function initDatabase() {
   await run(`
     CREATE TABLE IF NOT EXISTS chats (
@@ -93,13 +94,11 @@ async function initDatabase() {
       value TEXT
     )
   `);
+  await run('CREATE INDEX IF NOT EXISTS idx_messages_jid_timestamp ON messages(jid, timestamp)');
+  await run('CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp)');
 }
 
-initDatabase().catch(err => console.error('Error initializing SQLite DB tables:', err));
+const ready = initDatabase();
+ready.catch(err => console.error('Error initializing SQLite DB tables:', err));
 
-module.exports = {
-  db,
-  run,
-  get,
-  all
-};
+module.exports = { db, run, get, all, ready };
