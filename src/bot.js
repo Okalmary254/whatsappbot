@@ -8,7 +8,6 @@ const fs = require('fs');
 
 const configManager = require('./configManager');
 const logger = require('./logger');
-const statusHandler = require('./statusHandler');
 const messageHandler = require('./messageHandler');
 const chatStore = require('./chatStore');
 
@@ -110,7 +109,8 @@ class WhatsAppBot extends EventEmitter {
                            (msg.key.participant && msg.key.participant.includes('@broadcast'));
 
           if (isStatus) {
-            await statusHandler.handleStatus(this.sock, msg, currentConfig);
+            // Status viewing is intentionally disabled in this personal-agent build.
+            continue;
           } else {
             // Check if message is a Protocol Message (Revoke / Deleted Message)
             const protocolMsg = msg.message?.protocolMessage;
