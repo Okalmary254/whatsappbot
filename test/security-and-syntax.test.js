@@ -22,6 +22,14 @@ test('JavaScript files parse without syntax errors', () => {
   }
 });
 
+test('Groq key is loaded from repository-root .env and diagnosed without exposing it', () => {
+  const entry = fs.readFileSync(path.join(root, 'src/index.js'), 'utf8');
+  const service = fs.readFileSync(path.join(root, 'src/aiService.js'), 'utf8');
+  assert.match(entry, /path\.resolve\(__dirname, '\.\.', '\.env'\)/);
+  assert.match(entry, /GROQ_API_KEY.*detected.*MISSING/s);
+  assert.match(service, /process\.env\.GROQ_API_KEY/);
+});
+
 test('dashboard protects HTTP routes and WebSocket upgrades', () => {
   const server = fs.readFileSync(path.join(root, 'src/server.js'), 'utf8');
   assert.match(server, /DASHBOARD_PASSWORD/);
