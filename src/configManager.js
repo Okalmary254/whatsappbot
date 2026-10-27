@@ -40,7 +40,6 @@ function getEnvConfig() {
     },
     ai: {
       provider: "groq",
-      groqApiKey: process.env.GROQ_API_KEY || "",
       groqModel: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
       systemInstructions: `You are a polite, helpful WhatsApp personal AI assistant for ${process.env.ASSISTANT_OWNER_NAME || 'your owner'}. 
 Reply concisely, naturally, and conversationally. Keep answers short, friendly, and appropriate for instant messaging.`
@@ -85,7 +84,6 @@ class ConfigManager extends EventEmitter {
         };
 
         merged.ai.provider = "groq";
-        merged.ai.groqApiKey = process.env.GROQ_API_KEY || "";
         merged.ai.groqModel = process.env.GROQ_MODEL || merged.ai.groqModel || "openai/gpt-oss-120b";
 
         return merged;
