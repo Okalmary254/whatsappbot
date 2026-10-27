@@ -15,6 +15,12 @@ const dashboardPassword = process.env.DASHBOARD_PASSWORD || '';
 const dashboardHost = process.env.HOST || '127.0.0.1';
 const wss = new WebSocket.Server({ noServer: true });
 
+function sameOrigin(req) {
+  const origin = req.headers.origin;
+  if (!origin) return true;
+  try { return new URL(origin).host === req.headers.host; } catch (_) { return false; }
+}
+
 function authorizeRequest(req) {
   if (dashboardPassword) {
     const auth = req.headers.authorization || '';
@@ -33,6 +39,7 @@ function authorizeRequest(req) {
 }
 
 app.use((req, res, next) => {
+  if (!sameOrigin(req)) return res.status(403).send('Cross-origin requests are not allowed.');
   if (!authorizeRequest(req)) {
     if (!dashboardPassword && dashboardHost !== '127.0.0.1') {
       return res.status(503).send('Set DASHBOARD_PASSWORD before exposing the dashboard beyond localhost.');
@@ -222,7 +229,7 @@ function broadcast(message) {
 
 // Authenticate WebSocket upgrades as well as HTTP requests.
 server.on('upgrade', (req, socket, head) => {
-  if (!authorizeRequest(req)) {
+  if (!sameOrigin(req) || !authorizeRequest(req)) {
     socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');
     socket.destroy();
     return;
