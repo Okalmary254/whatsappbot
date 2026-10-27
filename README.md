@@ -1,60 +1,39 @@
-# WhatsApp Personal AI Agent
+# Whatsy: SQLite to Neon PostgreSQL code changes
 
-WhatsApp personal assistant built with Baileys, an Express web dashboard, SQLite chat history, and Groq AI.
+This patch replaces the SQLite database adapter and JSON-file persistence for chat/config/moderation with PostgreSQL.
 
-## Features
-- Link WhatsApp by QR code or phone pairing code.
-- Automatic replies to eligible chats using Groq.
-- Per-chat message history stored in SQLite.
-- Dashboard for chats, response rules, configuration, logs, and manual messages.
-- Owner commands: `/pause`, `/resume`, `/deleted`, and `/status`.
-- Group replies are disabled by default.
-- Status viewing and status digest functionality are disabled.
+## Files included
 
-## Setup
-Requires Node.js 20+ and a Groq API key.
+- `src/db.js` — PostgreSQL pool, schema initialization, and query helpers.
+- `src/chatStore.js` — chat/message/status persistence against PostgreSQL.
+- `src/configManager.js` — configuration stored in the `bot_config` table.
+- `src/moderation/store.js` — moderation settings and warning counts stored in PostgreSQL.
+- `neon-schema.sql` — equivalent schema for manual execution in Neon.
 
-```bash
-git clone https://github.com/Okalmary254/whatsappbot.git
-cd whatsappbot
-npm install
-cp .env.example .env
-```
+## Apply
 
-Edit `.env` and set `GROQ_API_KEY`, then start the application:
+1. Copy the four files into the matching locations in your repository.
+2. Install the PostgreSQL driver:
+   ```bash
+   npm install pg
+   ```
+3. After confirming no source file imports `sqlite3`, remove it:
+   ```bash
+   npm uninstall sqlite3
+   ```
+4. Set these environment variables in Render (without quotes around values):
+   - `DATABASE_URL_POOLED` = Neon pooled connection string
+   - `DATABASE_URL` = Neon direct connection string (fallback)
+   - `GROQ_API_KEY` = your Groq key
+   - `GROQ_MODEL` = `openai/gpt-oss-120b`
+   - `HOST` = `0.0.0.0`
+5. Use `npm start` as the Render start command. Keep your existing build command or use `npm ci`.
+6. Ensure startup awaits `configManager.ready` before starting the bot or accepting configuration-changing dashboard requests. `src/db.js` creates tables automatically, and `configManager.ready` waits for the config table.
+7. Run tests and check Render logs before using the bot.
 
-```bash
-npm start
-```
+## Important limitations
 
-Open http://localhost:3000 and link WhatsApp using the QR code or pairing flow.
-
-## Environment variables
-
-| Variable | Purpose | Default |
-|---|---|---|
-| `GROQ_API_KEY` | Groq secret key from https://console.groq.com/keys | Required |
-| `GROQ_MODEL` | Model identifier | `openai/gpt-oss-120b` |
-| `ASSISTANT_OWNER_NAME` | Assistant prompt owner name | `Jean` |
-| `REPLY_IN_GROUPS` | Enable group replies | `false` |
-| `WHITELIST_MODE` | Restrict replies to allowed numbers | `false` |
-| `ALLOWED_NUMBERS` | Comma-separated permitted numbers | Empty |
-| `IGNORE_NUMBERS` | Comma-separated ignored numbers | Empty |
-| `REPLY_DELAY_MIN_MS` | Minimum reply delay | `2000` |
-| `REPLY_DELAY_MAX_MS` | Maximum reply delay | `5000` |
-| `AUTH_DIR` | Optional override for WhatsApp authentication directory | `${DATA_DIR}/auth_info` by default |
-| `PORT` | Dashboard port | `3000` |
-
-The dashboard allows changing the model and system instructions. Set the Groq key only in the server environment, not in dashboard settings or source files. The dashboard uses HTTP Basic Authentication when `DASHBOARD_PASSWORD` is set.
-
-## Owner commands
-- `/pause` — pause automatic replies.
-- `/resume` — resume automatic replies.
-- `/deleted` — view recovered deleted messages where available.
-- `/status` or `/help` — view bot status and commands.
-
-## Deployment
-Use a **Web Service** (not a Background Worker) if you need the dashboard over HTTP. Do not set `AUTH_DIR` unless you intentionally want the session stored outside `DATA_DIR`. Attach a persistent disk and set `DATA_DIR` to its mount path (for example `/var/data`). This keeps `auth_info/`, `config.json`, `data/bot_database.sqlite`, and `data/moderation.json` on persistent storage. Set `HOST=0.0.0.0`, `DASHBOARD_PASSWORD` to a long unique password, and `GROQ_API_KEY` in the host's environment settings. Do not expose the service remotely without `DASHBOARD_PASSWORD`; without a password the dashboard is restricted to localhost.
-
-## Security
-Never commit `.env`, WhatsApp session files, or API keys. If a key was committed previously, revoke it and create a replacement; removing it from the latest file does not remove it from Git history.
+- This changes the live application storage code; it does **not** automatically import existing records from `data/bot_database.sqlite` or `data/moderation.json`. If those records matter, export/import them separately.
+- `src/bot.js` in the provided source still uses Baileys `useMultiFileAuthState(AUTH_FOLDER)`. WhatsApp login credentials are therefore still file-based. Neon will not persist that folder. You need a persistent disk or a separate PostgreSQL-backed Baileys auth adapter before deployments/restarts can retain the WhatsApp session.
+- The `getGroupSettings`, `updateGroupSettings`, and `incrementWarning` functions retain their original synchronous return shape, while PostgreSQL writes run asynchronously. The first settings read returns defaults while the database cache warms. For strict consistency, change these APIs and their callers to `async`/`await`.
+- The database URL must be a valid Neon connection string, commonly with `?sslmode=require` and optionally `&channel_binding=require`. Do not commit it to Git.

@@ -1,78 +1,80 @@
 const EventEmitter = require('events');
-const { run, all, get, ready } = require('./db');
+const { run, all, ready } = require('./db');
+
 const RETENTION_DAYS = Math.max(1, Number(process.env.MESSAGE_RETENTION_DAYS) || 30);
 const MAX_MESSAGES_PER_CHAT = Math.max(100, Number(process.env.MAX_MESSAGES_PER_CHAT) || 500);
 
 class ChatStore extends EventEmitter {
   constructor() {
     super();
-    // Map of jid -> { jid, name, phoneNumber, unreadCount, lastMessage, lastTimestamp, isGroup, hasDeletedMessages }
     this.chats = new Map();
-    // Map of jid -> Array<{ id, fromMe, text, timestamp, pushName, isDeleted, deletedAt }>
     this.messages = new Map();
-    // Array of status view logs
     this.statusViews = [];
-
-    // Load persisted state from DB
-    this.loadFromDb().catch(err => console.error('Error loading ChatStore from DB:', err));
+    this.loadPromise = this.loadFromDb();
+    this.loadPromise.catch((err) => {
+      console.error('Error loading ChatStore from PostgreSQL:', err);
+    });
   }
 
   async loadFromDb() {
-    try {
-      await ready;
-      const retentionCutoff = Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000;
-      await run('DELETE FROM messages WHERE timestamp < ?', [retentionCutoff]);
-      // Load chats
-      const dbChats = await all(`SELECT * FROM chats ORDER BY lastTimestamp DESC`);
-      for (const c of dbChats) {
-        this.chats.set(c.jid, {
-          jid: c.jid,
-          name: c.name,
-          phoneNumber: c.phoneNumber,
-          unreadCount: c.unreadCount || 0,
-          lastMessage: c.lastMessage,
-          lastTimestamp: c.lastTimestamp,
-          isGroup: Boolean(c.isGroup),
-          hasDeletedMessages: Boolean(c.hasDeletedMessages)
-        });
-      }
+    await ready;
+    const retentionCutoff = Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000;
 
-      // Load messages
-      const dbMsgs = await all(`SELECT * FROM messages WHERE timestamp >= ? ORDER BY timestamp ASC`, [retentionCutoff]);
-      for (const m of dbMsgs) {
-        if (!this.messages.has(m.jid)) {
-          this.messages.set(m.jid, []);
-        }
-        const list = this.messages.get(m.jid);
-        list.push({
-          id: m.id,
-          fromMe: Boolean(m.fromMe),
-          text: m.text,
-          timestamp: m.timestamp,
-          pushName: m.pushName,
-          isDeleted: Boolean(m.isDeleted),
-          deletedAt: m.deletedAt
-        });
-        if (list.length > MAX_MESSAGES_PER_CHAT) list.splice(0, list.length - MAX_MESSAGES_PER_CHAT);
-      }
+    await run('DELETE FROM messages WHERE timestamp < ?', [retentionCutoff]);
 
-      // Load status views
-      const dbStatuses = await all(`SELECT * FROM status_views ORDER BY timestamp DESC LIMIT 200`);
-      this.statusViews = dbStatuses.map(s => ({
-        id: s.id,
-        jid: s.jid,
-        pushName: s.pushName,
-        senderNumber: s.senderNumber,
-        contentType: s.contentType,
-        statusText: s.statusText,
-        timestamp: s.timestamp,
-        messageId: s.messageId
-      }));
-
-      console.log(`💾 Loaded ${this.chats.size} chats, ${dbMsgs.length} messages, and ${this.statusViews.length} status views from DB.`);
-    } catch (err) {
-      console.error('Error loading data from SQLite DB:', err);
+    const dbChats = await all('SELECT * FROM chats ORDER BY last_timestamp DESC NULLS LAST');
+    for (const c of dbChats) {
+      this.chats.set(c.jid, {
+        jid: c.jid,
+        name: c.name,
+        phoneNumber: c.phone_number,
+        unreadCount: c.unread_count || 0,
+        lastMessage: c.last_message,
+        lastTimestamp: c.last_timestamp == null ? null : Number(c.last_timestamp),
+        isGroup: Boolean(c.is_group),
+        hasDeletedMessages: Boolean(c.has_deleted_messages),
+      });
     }
+
+    const dbMsgs = await all(
+      'SELECT * FROM messages WHERE timestamp >= ? ORDER BY timestamp ASC',
+      [retentionCutoff]
+    );
+
+    for (const m of dbMsgs) {
+      if (!this.messages.has(m.jid)) this.messages.set(m.jid, []);
+      const list = this.messages.get(m.jid);
+      list.push({
+        id: m.id,
+        fromMe: Boolean(m.from_me),
+        text: m.text,
+        timestamp: Number(m.timestamp),
+        pushName: m.push_name,
+        isDeleted: Boolean(m.is_deleted),
+        deletedAt: m.deleted_at == null ? null : Number(m.deleted_at),
+      });
+      if (list.length > MAX_MESSAGES_PER_CHAT) {
+        list.splice(0, list.length - MAX_MESSAGES_PER_CHAT);
+      }
+    }
+
+    const dbStatuses = await all(
+      'SELECT * FROM status_views ORDER BY timestamp DESC LIMIT 200'
+    );
+    this.statusViews = dbStatuses.map((s) => ({
+      id: s.id,
+      jid: s.jid,
+      pushName: s.push_name,
+      senderNumber: s.sender_number,
+      contentType: s.content_type,
+      statusText: s.status_text,
+      timestamp: Number(s.timestamp),
+      messageId: s.message_id,
+    }));
+
+    console.log(
+      `Loaded ${this.chats.size} chats, ${dbMsgs.length} messages, and ${this.statusViews.length} status views from PostgreSQL.`
+    );
   }
 
   addMessage({ jid, id, fromMe, text, pushName, timestamp, isGroup = false }) {
@@ -82,43 +84,43 @@ class ChatStore extends EventEmitter {
     if (cleanJid === 'status@broadcast') return null;
 
     const phoneNumber = cleanJid.split('@')[0];
-    const messageTime = timestamp ? (typeof timestamp === 'number' ? (timestamp > 1e11 ? timestamp : timestamp * 1000) : Date.parse(timestamp)) : Date.now();
+    const messageTime = timestamp
+      ? (typeof timestamp === 'number'
+        ? (timestamp > 1e11 ? timestamp : timestamp * 1000)
+        : Date.parse(timestamp))
+      : Date.now();
     const name = pushName || phoneNumber;
 
-    // Update or create chat entry
     const existingChat = this.chats.get(cleanJid) || {
       jid: cleanJid,
-      name: name,
-      phoneNumber: phoneNumber,
+      name,
+      phoneNumber,
       unreadCount: 0,
       lastMessage: text,
       lastTimestamp: messageTime,
       isGroup: Boolean(isGroup),
-      hasDeletedMessages: false
+      hasDeletedMessages: false,
     };
 
     existingChat.lastMessage = text;
     existingChat.lastTimestamp = messageTime;
-    if (pushName && pushName !== phoneNumber) {
-      existingChat.name = pushName;
-    }
-
-    if (!fromMe) {
-      existingChat.unreadCount = (existingChat.unreadCount || 0) + 1;
-    }
-
+    existingChat.isGroup = Boolean(existingChat.isGroup || isGroup);
+    if (pushName && pushName !== phoneNumber) existingChat.name = pushName;
+    if (!fromMe) existingChat.unreadCount = (existingChat.unreadCount || 0) + 1;
     this.chats.set(cleanJid, existingChat);
 
-    // Save chat to DB
     run(`
-      INSERT INTO chats (jid, name, phoneNumber, unreadCount, lastMessage, lastTimestamp, isGroup, hasDeletedMessages)
+      INSERT INTO chats
+        (jid, name, phone_number, unread_count, last_message, last_timestamp, is_group, has_deleted_messages)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(jid) DO UPDATE SET
-        name = excluded.name,
-        unreadCount = excluded.unreadCount,
-        lastMessage = excluded.lastMessage,
-        lastTimestamp = excluded.lastTimestamp,
-        hasDeletedMessages = excluded.hasDeletedMessages
+      ON CONFLICT (jid) DO UPDATE SET
+        name = EXCLUDED.name,
+        phone_number = EXCLUDED.phone_number,
+        unread_count = EXCLUDED.unread_count,
+        last_message = EXCLUDED.last_message,
+        last_timestamp = EXCLUDED.last_timestamp,
+        is_group = EXCLUDED.is_group,
+        has_deleted_messages = EXCLUDED.has_deleted_messages
     `, [
       existingChat.jid,
       existingChat.name,
@@ -126,54 +128,43 @@ class ChatStore extends EventEmitter {
       existingChat.unreadCount,
       existingChat.lastMessage,
       existingChat.lastTimestamp,
-      existingChat.isGroup ? 1 : 0,
-      existingChat.hasDeletedMessages ? 1 : 0
-    ]).catch(e => console.error('Error saving chat to DB:', e));
+      existingChat.isGroup,
+      existingChat.hasDeletedMessages,
+    ]).catch((err) => console.error('Error saving chat to PostgreSQL:', err));
 
-    // Add to message history
-    if (!this.messages.has(cleanJid)) {
-      this.messages.set(cleanJid, []);
-    }
-
+    if (!this.messages.has(cleanJid)) this.messages.set(cleanJid, []);
     const chatMessages = this.messages.get(cleanJid);
     const msgObj = {
-      id: id || Date.now().toString() + Math.random().toString(36).substr(2, 4),
+      id: id || `${Date.now()}${Math.random().toString(36).slice(2, 6)}`,
       fromMe: Boolean(fromMe),
-      text: text,
+      text,
       timestamp: messageTime,
       pushName: name,
       isDeleted: false,
-      deletedAt: null
+      deletedAt: null,
     };
 
-    // Avoid duplicate message IDs
-    if (!chatMessages.some(m => m.id === msgObj.id)) {
+    if (!chatMessages.some((m) => m.id === msgObj.id)) {
       chatMessages.push(msgObj);
       if (chatMessages.length > MAX_MESSAGES_PER_CHAT) {
         chatMessages.splice(0, chatMessages.length - MAX_MESSAGES_PER_CHAT);
       }
 
-      // Save message to DB
       run(`
-        INSERT INTO messages (id, jid, fromMe, text, timestamp, pushName, isDeleted, deletedAt)
-        VALUES (?, ?, ?, ?, ?, ?, 0, NULL)
-        ON CONFLICT(id) DO NOTHING
+        INSERT INTO messages (id, jid, from_me, text, timestamp, push_name, is_deleted, deleted_at)
+        VALUES (?, ?, ?, ?, ?, ?, FALSE, NULL)
+        ON CONFLICT (id) DO NOTHING
       `, [
         msgObj.id,
         cleanJid,
-        msgObj.fromMe ? 1 : 0,
+        msgObj.fromMe,
         msgObj.text,
         msgObj.timestamp,
-        msgObj.pushName
-      ]).catch(e => console.error('Error saving message to DB:', e));
+        msgObj.pushName,
+      ]).catch((err) => console.error('Error saving message to PostgreSQL:', err));
     }
 
-    // Emit real-time event
-    this.emit('chatUpdated', {
-      chat: existingChat,
-      message: msgObj
-    });
-
+    this.emit('chatUpdated', { chat: existingChat, message: msgObj });
     return { chat: existingChat, message: msgObj };
   }
 
@@ -181,20 +172,15 @@ class ChatStore extends EventEmitter {
     if (!remoteJid || !targetId) return null;
 
     const cleanJid = remoteJid.trim();
-    if (!this.messages.has(cleanJid)) {
-      this.messages.set(cleanJid, []);
-    }
-
+    if (!this.messages.has(cleanJid)) this.messages.set(cleanJid, []);
     const chatMessages = this.messages.get(cleanJid);
-    let revokedMsg = chatMessages.find(m => m.id === targetId);
-
+    let revokedMsg = chatMessages.find((m) => m.id === targetId);
     const now = revokeTimestamp || Date.now();
 
     if (revokedMsg) {
       revokedMsg.isDeleted = true;
       revokedMsg.deletedAt = now;
     } else {
-      // Create a placeholder for revoked message if original was deleted before bot recorded text
       const phoneNumber = cleanJid.split('@')[0];
       revokedMsg = {
         id: targetId,
@@ -203,34 +189,35 @@ class ChatStore extends EventEmitter {
         timestamp: now,
         pushName: phoneNumber,
         isDeleted: true,
-        deletedAt: now
+        deletedAt: now,
       };
       chatMessages.push(revokedMsg);
     }
 
-    // Update in DB
     run(`
-      INSERT INTO messages (id, jid, fromMe, text, timestamp, pushName, isDeleted, deletedAt)
-      VALUES (?, ?, 0, ?, ?, ?, 1, ?)
-      ON CONFLICT(id) DO UPDATE SET isDeleted = 1, deletedAt = excluded.deletedAt
+      INSERT INTO messages (id, jid, from_me, text, timestamp, push_name, is_deleted, deleted_at)
+      VALUES (?, ?, FALSE, ?, ?, ?, TRUE, ?)
+      ON CONFLICT (id) DO UPDATE SET
+        is_deleted = TRUE,
+        deleted_at = EXCLUDED.deleted_at
     `, [
       revokedMsg.id,
       cleanJid,
       revokedMsg.text,
       revokedMsg.timestamp,
       revokedMsg.pushName,
-      now
-    ]).catch(e => console.error('Error updating revoked message in DB:', e));
+      now,
+    ]).catch((err) => console.error('Error updating revoked message in PostgreSQL:', err));
 
     const chat = this.chats.get(cleanJid) || {
       jid: cleanJid,
       name: cleanJid.split('@')[0],
       phoneNumber: cleanJid.split('@')[0],
       unreadCount: 0,
-      lastMessage: `🗑️ Restored Message: "${revokedMsg.text}"`,
+      lastMessage: '',
       lastTimestamp: now,
       isGroup: cleanJid.endsWith('@g.us'),
-      hasDeletedMessages: true
+      hasDeletedMessages: true,
     };
 
     chat.hasDeletedMessages = true;
@@ -239,12 +226,13 @@ class ChatStore extends EventEmitter {
     this.chats.set(cleanJid, chat);
 
     run(`
-      INSERT INTO chats (jid, name, phoneNumber, unreadCount, lastMessage, lastTimestamp, isGroup, hasDeletedMessages)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 1)
-      ON CONFLICT(jid) DO UPDATE SET
-        lastMessage = excluded.lastMessage,
-        lastTimestamp = excluded.lastTimestamp,
-        hasDeletedMessages = 1
+      INSERT INTO chats
+        (jid, name, phone_number, unread_count, last_message, last_timestamp, is_group, has_deleted_messages)
+      VALUES (?, ?, ?, ?, ?, ?, ?, TRUE)
+      ON CONFLICT (jid) DO UPDATE SET
+        last_message = EXCLUDED.last_message,
+        last_timestamp = EXCLUDED.last_timestamp,
+        has_deleted_messages = TRUE
     `, [
       chat.jid,
       chat.name,
@@ -252,44 +240,34 @@ class ChatStore extends EventEmitter {
       chat.unreadCount,
       chat.lastMessage,
       chat.lastTimestamp,
-      chat.isGroup ? 1 : 0
-    ]).catch(e => console.error('Error updating chat revoke state in DB:', e));
+      chat.isGroup,
+    ]).catch((err) => console.error('Error updating chat revoke state in PostgreSQL:', err));
 
-    this.emit('chatUpdated', {
-      chat,
-      message: revokedMsg
-    });
-
-    this.emit('messageRevoked', {
-      jid: cleanJid,
-      chat,
-      message: revokedMsg
-    });
-
+    this.emit('chatUpdated', { chat, message: revokedMsg });
+    this.emit('messageRevoked', { jid: cleanJid, chat, message: revokedMsg });
     return { chat, message: revokedMsg };
   }
 
   saveStatusView({ id, jid, pushName, senderNumber, contentType, statusText, timestamp, messageId }) {
     const entry = {
-      id: id || Date.now().toString() + Math.random().toString(36).substr(2, 4),
+      id: id || `${Date.now()}${Math.random().toString(36).slice(2, 6)}`,
       jid,
       pushName: pushName || senderNumber,
       senderNumber,
       contentType: contentType || 'Text',
       statusText: statusText || '',
       timestamp: timestamp || Date.now(),
-      messageId
+      messageId,
     };
 
     this.statusViews.unshift(entry);
-    if (this.statusViews.length > 300) {
-      this.statusViews.pop();
-    }
+    if (this.statusViews.length > 300) this.statusViews.pop();
 
     run(`
-      INSERT INTO status_views (id, jid, pushName, senderNumber, contentType, statusText, timestamp, messageId)
+      INSERT INTO status_views
+        (id, jid, push_name, sender_number, content_type, status_text, timestamp, message_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO NOTHING
+      ON CONFLICT (id) DO NOTHING
     `, [
       entry.id,
       entry.jid,
@@ -298,8 +276,8 @@ class ChatStore extends EventEmitter {
       entry.contentType,
       entry.statusText,
       entry.timestamp,
-      entry.messageId
-    ]).catch(e => console.error('Error saving status view to DB:', e));
+      entry.messageId,
+    ]).catch((err) => console.error('Error saving status view to PostgreSQL:', err));
 
     this.emit('statusViewed', entry);
     return entry;
@@ -313,31 +291,28 @@ class ChatStore extends EventEmitter {
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
     const startTimestamp = startOfDay.getTime();
-
-    return this.statusViews.filter(s => s.timestamp >= startTimestamp);
+    return this.statusViews.filter((s) => Number(s.timestamp) >= startTimestamp);
   }
 
   getDeletedMessages() {
     const deletedList = [];
     for (const [jid, msgList] of this.messages.entries()) {
-      msgList.forEach(msg => {
+      msgList.forEach((msg) => {
         if (msg.isDeleted) {
-          deletedList.push({
-            ...msg,
-            jid,
-            phoneNumber: jid.split('@')[0]
-          });
+          deletedList.push({ ...msg, jid, phoneNumber: jid.split('@')[0] });
         }
       });
     }
-    deletedList.sort((a, b) => (b.deletedAt || b.timestamp) - (a.deletedAt || a.timestamp));
+    deletedList.sort(
+      (a, b) => (Number(b.deletedAt || b.timestamp) - Number(a.deletedAt || a.timestamp))
+    );
     return deletedList;
   }
 
   getChats() {
-    const list = Array.from(this.chats.values());
-    list.sort((a, b) => b.lastTimestamp - a.lastTimestamp);
-    return list;
+    return Array.from(this.chats.values()).sort(
+      (a, b) => Number(b.lastTimestamp || 0) - Number(a.lastTimestamp || 0)
+    );
   }
 
   getMessages(jid) {
@@ -354,7 +329,8 @@ class ChatStore extends EventEmitter {
       const chat = this.chats.get(cleanJid);
       chat.unreadCount = 0;
       this.chats.set(cleanJid, chat);
-      run(`UPDATE chats SET unreadCount = 0 WHERE jid = ?`, [cleanJid]).catch(() => {});
+      run('UPDATE chats SET unread_count = 0 WHERE jid = ?', [cleanJid])
+        .catch(() => {});
     }
   }
 }

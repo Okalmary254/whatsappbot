@@ -1,0 +1,14 @@
+{
+  "groups": {
+    "120363425665595170@g.us": {
+      "antilink": false,
+      "antidelete": false,
+      "antimention": false,
+      "antimentionLimit": 5,
+      "welcome": false,
+      "welcomeMessage": "Welcome to the group, {mention}! 👋 Please check the pinned rules.",
+      "goodbyeMessage": null,
+      "warnings": {}
+    }
+  }
+}

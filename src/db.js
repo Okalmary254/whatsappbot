@@ -1,104 +1,195 @@
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
-const fs = require('fs');
+const { Pool } = require('pg');
 
-const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..');
-const DB_PATH = path.join(DATA_DIR, 'data', 'bot_database.sqlite');
+const connectionString =
+  process.env.DATABASE_URL_POOLED ||
+  process.env.DATABASE_URL;
 
-// Ensure data directory exists
-const dataDir = path.dirname(DB_PATH);
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
+if (!connectionString) {
+  throw new Error(
+    'DATABASE_URL_POOLED or DATABASE_URL must be configured for PostgreSQL.'
+  );
 }
 
-const db = new sqlite3.Database(DB_PATH, (err) => {
-  if (err) {
-    console.error('Failed to connect to SQLite database:', err);
-  } else {
-    console.log('📦 Connected to persistent SQLite database at:', DB_PATH);
-  }
+const pool = new Pool({
+  connectionString,
+  ssl: process.env.PGSSLMODE === 'disable'
+    ? false
+    : { rejectUnauthorized: false },
+  max: Number(process.env.PG_POOL_MAX) || 5,
+  idleTimeoutMillis: 30_000,
+  connectionTimeoutMillis: 15_000,
 });
 
-// Helper for DB queries using Promises
-function run(sql, params = []) {
-  return new Promise((resolve, reject) => {
-    db.run(sql, params, function (err) {
-      if (err) reject(err);
-      else resolve(this);
-    });
-  });
+pool.on('error', (err) => {
+  console.error('Unexpected PostgreSQL pool error:', err.message);
+});
+
+// Convert SQLite-style ? placeholders to PostgreSQL $1, $2, ...
+// This supports the parameterized statements used by the existing project.
+function toPostgresPlaceholders(sql) {
+  let index = 0;
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  let output = '';
+
+  for (let i = 0; i < sql.length; i += 1) {
+    const char = sql[i];
+
+    if (char === "'" && !inDoubleQuote) {
+      // SQL escapes a single quote by doubling it.
+      if (inSingleQuote && sql[i + 1] === "'") {
+        output += "''";
+        i += 1;
+        continue;
+      }
+      inSingleQuote = !inSingleQuote;
+      output += char;
+      continue;
+    }
+
+    if (char === '"' && !inSingleQuote) {
+      if (inDoubleQuote && sql[i + 1] === '"') {
+        output += '""';
+        i += 1;
+        continue;
+      }
+      inDoubleQuote = !inDoubleQuote;
+      output += char;
+      continue;
+    }
+
+    if (char === '?' && !inSingleQuote && !inDoubleQuote) {
+      index += 1;
+      output += `$${index}`;
+    } else {
+      output += char;
+    }
+  }
+
+  return output;
 }
 
-function get(sql, params = []) {
-  return new Promise((resolve, reject) => {
-    db.get(sql, params, (err, row) => {
-      if (err) reject(err);
-      else resolve(row);
-    });
-  });
-}
-
-function all(sql, params = []) {
-  return new Promise((resolve, reject) => {
-    db.all(sql, params, (err, rows) => {
-      if (err) reject(err);
-      else resolve(rows);
-    });
-  });
-}
-
-// Initialize tables; callers await ready before reading persisted state.
 async function initDatabase() {
-  await run(`
+  // Use snake_case identifiers throughout PostgreSQL to avoid quoted-name issues.
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS chats (
       jid TEXT PRIMARY KEY,
       name TEXT,
-      phoneNumber TEXT,
-      unreadCount INTEGER DEFAULT 0,
-      lastMessage TEXT,
-      lastTimestamp INTEGER,
-      isGroup INTEGER DEFAULT 0,
-      hasDeletedMessages INTEGER DEFAULT 0
+      phone_number TEXT,
+      unread_count INTEGER NOT NULL DEFAULT 0,
+      last_message TEXT,
+      last_timestamp BIGINT,
+      is_group BOOLEAN NOT NULL DEFAULT FALSE,
+      has_deleted_messages BOOLEAN NOT NULL DEFAULT FALSE
     )
   `);
 
-  await run(`
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS messages (
       id TEXT PRIMARY KEY,
-      jid TEXT,
-      fromMe INTEGER,
+      jid TEXT NOT NULL,
+      from_me BOOLEAN NOT NULL DEFAULT FALSE,
       text TEXT,
-      timestamp INTEGER,
-      pushName TEXT,
-      isDeleted INTEGER DEFAULT 0,
-      deletedAt INTEGER
+      timestamp BIGINT NOT NULL,
+      push_name TEXT,
+      is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+      deleted_at BIGINT
     )
   `);
 
-  await run(`
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS status_views (
       id TEXT PRIMARY KEY,
       jid TEXT,
-      pushName TEXT,
-      senderNumber TEXT,
-      contentType TEXT,
-      statusText TEXT,
-      timestamp INTEGER,
-      messageId TEXT
+      push_name TEXT,
+      sender_number TEXT,
+      content_type TEXT,
+      status_text TEXT,
+      timestamp BIGINT NOT NULL,
+      message_id TEXT
     )
   `);
 
-  await run(`
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS bot_state (
       key TEXT PRIMARY KEY,
       value TEXT
     )
   `);
-  await run('CREATE INDEX IF NOT EXISTS idx_messages_jid_timestamp ON messages(jid, timestamp)');
-  await run('CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp)');
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS bot_config (
+      config_key TEXT PRIMARY KEY,
+      config JSONB NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS moderation_groups (
+      group_id TEXT PRIMARY KEY,
+      settings JSONB NOT NULL DEFAULT '{}'::jsonb,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS moderation_warnings (
+      group_id TEXT NOT NULL,
+      participant_id TEXT NOT NULL,
+      warning_count INTEGER NOT NULL DEFAULT 0 CHECK (warning_count >= 0),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (group_id, participant_id)
+    )
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_messages_jid_timestamp
+    ON messages (jid, timestamp)
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_messages_timestamp
+    ON messages (timestamp)
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_status_views_timestamp
+    ON status_views (timestamp)
+  `);
+
+  console.log('Connected to PostgreSQL and verified database schema.');
 }
 
-const ready = initDatabase();
-ready.catch(err => console.error('Error initializing SQLite DB tables:', err));
+const ready = initDatabase().catch((err) => {
+  console.error('Error initializing PostgreSQL database:', err);
+  throw err;
+});
 
-module.exports = { db, run, get, all, ready };
+async function query(sql, params = []) {
+  await ready;
+  return pool.query(toPostgresPlaceholders(sql), params);
+}
+
+async function run(sql, params = []) {
+  const result = await query(sql, params);
+  return {
+    changes: result.rowCount,
+    rowCount: result.rowCount,
+    rows: result.rows,
+  };
+}
+
+async function get(sql, params = []) {
+  const result = await query(sql, params);
+  return result.rows[0];
+}
+
+async function all(sql, params = []) {
+  const result = await query(sql, params);
+  return result.rows;
+}
+
+async function closeDatabase() {
+  await pool.end();
+}
+
+module.exports = { db: pool, pool, query, run, get, all, ready, closeDatabase };

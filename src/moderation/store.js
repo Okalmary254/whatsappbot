@@ -1,33 +1,4 @@
-const fs = require('fs');
-const path = require('path');
-
-const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', '..');
-const DB_PATH = process.env.WHATSY_DB_PATH || path.join(DATA_DIR, 'data', 'moderation.json');
-
-function ensureDB() {
-  const dir = path.dirname(DB_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  if (!fs.existsSync(DB_PATH)) {
-    fs.writeFileSync(DB_PATH, JSON.stringify({ groups: {} }, null, 2));
-  }
-}
-
-function readDB() {
-  ensureDB();
-  try {
-    return JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
-  } catch (err) {
-    console.error('[store] Failed to read DB, resetting:', err.message);
-    const fresh = { groups: {} };
-    fs.writeFileSync(DB_PATH, JSON.stringify(fresh, null, 2));
-    return fresh;
-  }
-}
-
-function writeDB(data) {
-  ensureDB();
-  fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
-}
+const { pool, ready } = require('../db');
 
 const DEFAULT_GROUP_SETTINGS = {
   antilink: false,
@@ -40,31 +11,115 @@ const DEFAULT_GROUP_SETTINGS = {
   warnings: {},
 };
 
+// Serialize writes for the same group so concurrent dashboard/message updates
+// do not overwrite each other based on stale reads.
+const groupWriteQueues = new Map();
+
+async function getStoredGroup(groupId) {
+  await ready;
+  const result = await pool.query(
+    'SELECT settings FROM moderation_groups WHERE group_id = $1',
+    [groupId]
+  );
+  return result.rows[0]?.settings || null;
+}
+
+function queueGroupWrite(groupId, operation) {
+  const previous = groupWriteQueues.get(groupId) || Promise.resolve();
+  const next = previous.catch(() => {}).then(operation);
+  groupWriteQueues.set(groupId, next);
+  return next.finally(() => {
+    if (groupWriteQueues.get(groupId) === next) groupWriteQueues.delete(groupId);
+  });
+}
+
 function getGroupSettings(groupId) {
-  const db = readDB();
-  if (!db.groups[groupId]) {
-    db.groups[groupId] = { ...DEFAULT_GROUP_SETTINGS };
-    writeDB(db);
+  // Preserve the original synchronous API. Values are cached after first load;
+  // on first call return defaults while the database read warms the cache.
+  if (!groupCache.has(groupId)) {
+    groupCache.set(groupId, { ...DEFAULT_GROUP_SETTINGS, warnings: {} });
+    getStoredGroup(groupId).then(async (stored) => {
+      if (stored) {
+        const warnings = await getWarnings(groupId);
+        groupCache.set(groupId, {
+          ...DEFAULT_GROUP_SETTINGS,
+          ...stored,
+          warnings,
+        });
+      } else {
+        await saveGroupSettings(groupId, groupCache.get(groupId));
+      }
+    }).catch((err) => console.error('[moderation/store] Load group settings failed:', err.message));
   }
-  return { ...DEFAULT_GROUP_SETTINGS, ...db.groups[groupId] };
+
+  return {
+    ...DEFAULT_GROUP_SETTINGS,
+    ...groupCache.get(groupId),
+    warnings: { ...(groupCache.get(groupId).warnings || {}) },
+  };
+}
+
+const groupCache = new Map();
+
+async function saveGroupSettings(groupId, settings) {
+  await ready;
+  const safeSettings = { ...settings };
+  delete safeSettings.warnings;
+
+  await pool.query(
+    `INSERT INTO moderation_groups (group_id, settings, updated_at)
+     VALUES ($1, $2::jsonb, NOW())
+     ON CONFLICT (group_id)
+     DO UPDATE SET settings = EXCLUDED.settings, updated_at = NOW()`,
+    [groupId, JSON.stringify(safeSettings)]
+  );
+}
+
+async function getWarnings(groupId) {
+  await ready;
+  const result = await pool.query(
+    'SELECT participant_id, warning_count FROM moderation_warnings WHERE group_id = $1',
+    [groupId]
+  );
+  return Object.fromEntries(result.rows.map((row) => [row.participant_id, Number(row.warning_count)]));
 }
 
 function updateGroupSettings(groupId, patch) {
-  const db = readDB();
-  const current = db.groups[groupId] || { ...DEFAULT_GROUP_SETTINGS };
-  db.groups[groupId] = { ...current, ...patch };
-  writeDB(db);
-  return db.groups[groupId];
+  const current = getGroupSettings(groupId);
+  const updated = { ...current, ...patch };
+  if (patch.warnings) updated.warnings = { ...current.warnings, ...patch.warnings };
+  groupCache.set(groupId, updated);
+
+  queueGroupWrite(groupId, async () => {
+    await saveGroupSettings(groupId, updated);
+  }).catch((err) => console.error('[moderation/store] Save settings failed:', err.message));
+
+  return { ...updated, warnings: { ...(updated.warnings || {}) } };
 }
 
 function incrementWarning(groupId, participantId) {
-  const db = readDB();
-  const group = db.groups[groupId] || { ...DEFAULT_GROUP_SETTINGS, warnings: {} };
-  group.warnings = group.warnings || {};
-  group.warnings[participantId] = (group.warnings[participantId] || 0) + 1;
-  db.groups[groupId] = group;
-  writeDB(db);
-  return group.warnings[participantId];
+  const current = getGroupSettings(groupId);
+  const nextCount = Number(current.warnings?.[participantId] || 0) + 1;
+  const updated = {
+    ...current,
+    warnings: { ...(current.warnings || {}), [participantId]: nextCount },
+  };
+  groupCache.set(groupId, updated);
+
+  queueGroupWrite(groupId, async () => {
+    await ready;
+    await pool.query(
+      `INSERT INTO moderation_warnings
+         (group_id, participant_id, warning_count, updated_at)
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (group_id, participant_id)
+       DO UPDATE SET warning_count = EXCLUDED.warning_count, updated_at = NOW()`,
+      [groupId, participantId, nextCount]
+    );
+    await saveGroupSettings(groupId, updated);
+  }).catch((err) => console.error('[moderation/store] Save warning failed:', err.message));
+
+  return nextCount;
 }
 
 const MAX_CACHE_SIZE = 2000;
@@ -75,7 +130,7 @@ function cacheMessage(remoteJid, messageId, entry) {
   messageCache.set(key, entry);
   if (messageCache.size > MAX_CACHE_SIZE) {
     const oldestKey = messageCache.keys().next().value;
-    messageCache.delete(oldestKey);
+    if (oldestKey !== undefined) messageCache.delete(oldestKey);
   }
 }
 
