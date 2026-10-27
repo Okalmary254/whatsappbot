@@ -1,11 +1,12 @@
 {
   "name": "whatsapp-auto-bot",
   "version": "1.0.0",
-  "description": "WhatsApp Chatbot for Auto Status Viewing and Automatic Instruction-Based Message Replies",
+  "description": "WhatsApp personal AI assistant powered by Groq",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "node src/index.js"
+    "dev": "node src/index.js",
+    "test": "node --test"
   },
   "keywords": [
     "whatsapp",
@@ -31,5 +32,8 @@
     "qrcode-terminal": "^0.12.0",
     "sqlite3": "^6.0.1",
     "ws": "^8.18.0"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }
