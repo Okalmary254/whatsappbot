@@ -2,7 +2,7 @@
   "bot": {
     "name": "WhatsApp AI Assistant",
     "ownerName": "Alex",
-    "autoViewStatus": true,
+    "autoViewStatus": false,
     "autoReactStatus": false,
     "statusReactionEmoji": "💚",
     "autoReply": true,
@@ -18,15 +18,10 @@
     "allowedSenders": []
   },
   "ai": {
-    "provider": "gemini",
-    "anthropicApiKey": "",
-    "anthropicModel": "claude-3-5-sonnet-20241022",
-    "openaiApiKey": "",
-    "openaiModel": "gpt-4o-mini",
-    "geminiApiKey": "AQ.Ab8RN6L8M8p6QiqiekkcEDXTCx0dKMmpiPBvi-1TEsgvQRZoew",
-    "geminiModel": "gemini-2.0-flash",
+    "provider": "groq",
     "systemInstructions": "You are a polite, helpful WhatsApp personal AI assistant for Alex. \nReply concisely, naturally, and conversationally. Keep answers short, friendly, and appropriate for instant messaging.",
-    "model": "gemini-2.0-flash"
+    "groqApiKey": "",
+    "groqModel": "openai/gpt-oss-120b"
   },
   "rules": [
     {
