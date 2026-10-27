@@ -30,7 +30,7 @@ function getEnvConfig() {
   return {
     bot: {
       name: "WhatsApp AI Assistant",
-      ownerName: process.env.ASSISTANT_OWNER_NAME || "Alex",
+      ownerName: process.env.ASSISTANT_OWNER_NAME || "John",
       autoViewStatus: false,
       autoReactStatus: false,
       statusReactionEmoji: "💚",
@@ -49,7 +49,7 @@ function getEnvConfig() {
     ai: {
       provider: "groq",
       groqModel: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
-      systemInstructions: `You are a polite, helpful WhatsApp personal AI assistant for ${process.env.ASSISTANT_OWNER_NAME || 'your owner'}. 
+      systemInstructions: `You are a polite, helpful WhatsApp personal AI assistant for ${process.env.ASSISTANT_OWNER_NAME || 'your owner'}.
 Reply concisely, naturally, and conversationally. Keep answers short, friendly, and appropriate for instant messaging.`
     },
     rules: [
@@ -57,7 +57,7 @@ Reply concisely, naturally, and conversationally. Keep answers short, friendly, 
         id: "1",
         trigger: "hello",
         type: "contains",
-        response: "Hello! 👋 I am an automated assistant. How can I help you today?"
+        response: "Hello! 👋 I'm Jean, an automated assistant. How can I help you today?"
       },
       {
         id: "2",
@@ -117,9 +117,9 @@ class ConfigManager extends EventEmitter {
     };
 
     // Ensure owner name updates system instructions if needed
-    const ownerName = this.config.bot.ownerName || process.env.ASSISTANT_OWNER_NAME || "Alex";
+    const ownerName = this.config.bot.ownerName || process.env.ASSISTANT_OWNER_NAME || "John";
     if (!newConfig.ai?.systemInstructions) {
-      this.config.ai.systemInstructions = `You are a polite, helpful WhatsApp personal AI assistant for ${ownerName}. 
+      this.config.ai.systemInstructions = `You are a polite, helpful WhatsApp personal AI assistant for ${ownerName}.
 Reply concisely, naturally, and conversationally. Keep answers short, friendly, and appropriate for instant messaging.`;
     }
 

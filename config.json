@@ -1,7 +1,7 @@
 {
   "bot": {
     "name": "WhatsApp AI Assistant",
-    "ownerName": "Alex",
+    "ownerName": "John",
     "autoViewStatus": false,
     "autoReactStatus": false,
     "statusReactionEmoji": "💚",
@@ -19,7 +19,7 @@
   },
   "ai": {
     "provider": "groq",
-    "systemInstructions": "You are a polite, helpful WhatsApp personal AI assistant for Alex. \nReply concisely, naturally, and conversationally. Keep answers short, friendly, and appropriate for instant messaging.",
+    "systemInstructions": "You are a polite, helpful WhatsApp personal AI assistant for John. \nReply concisely, naturally, and conversationally. Keep answers short, friendly, and appropriate for instant messaging.",
     "groqApiKey": "",
     "groqModel": "openai/gpt-oss-120b"
   },

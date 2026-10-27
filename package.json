@@ -34,6 +34,11 @@
     "ws": "^8.18.0"
   },
   "engines": {
-    "node": ">=20"
+    "node": "22.x"
+  },
+  "allowScripts": {
+    "sqlite3@6.0.1": true,
+    "@whiskeysockets/baileys@6.7.23": true,
+    "protobufjs@7.6.5": true
   }
 }

@@ -18,9 +18,9 @@ class MessageHandler {
     const pushName = msg.pushName || senderNumber;
 
     // Extract incoming message text
-    const incomingText = msg.message?.conversation || 
-                         msg.message?.extendedTextMessage?.text || 
-                         msg.message?.imageMessage?.caption || 
+    const incomingText = msg.message?.conversation ||
+                         msg.message?.extendedTextMessage?.text ||
+                         msg.message?.imageMessage?.caption ||
                          msg.message?.videoMessage?.caption || '';
 
     if (!incomingText || incomingText.trim() === '') return;
@@ -135,7 +135,7 @@ class MessageHandler {
 
   async handleOwnerCommand(sock, remoteJid, commandText, msg, config) {
     const cmd = commandText.split(' ')[0].toLowerCase();
-    const ownerName = config.bot?.ownerName || process.env.ASSISTANT_OWNER_NAME || 'Alex';
+    const ownerName = config.bot?.ownerName || process.env.ASSISTANT_OWNER_NAME || 'John';
 
     if (cmd === '/pause') {
       configManager.setPaused(true);
