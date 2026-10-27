@@ -8,7 +8,6 @@ const configManager = require('./configManager');
 const logger = require('./logger');
 const bot = require('./bot');
 const chatStore = require('./chatStore');
-const aiService = require('./aiService');
 
 const app = express();
 const server = http.createServer(app);
@@ -49,22 +48,6 @@ app.post('/api/pause', (req, res) => {
     logger.log('system', `Auto-reply state changed via API: ${newState ? 'PAUSED' : 'ACTIVE'}`);
     broadcast({ type: 'config_update', data: configManager.getConfig() });
     res.json({ success: true, isPaused: newState });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.get('/api/status-digest', async (req, res) => {
-  try {
-    const todayStatuses = chatStore.getTodayStatusViews();
-    const config = configManager.getConfig();
-    const digestText = await aiService.generateStatusDigest(todayStatuses, config);
-    res.json({
-      success: true,
-      count: todayStatuses.length,
-      digest: digestText,
-      statuses: todayStatuses
-    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

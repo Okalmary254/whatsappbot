@@ -23,7 +23,7 @@ function getEnvConfig() {
     bot: {
       name: "WhatsApp AI Assistant",
       ownerName: process.env.ASSISTANT_OWNER_NAME || "Alex",
-      autoViewStatus: true,
+      autoViewStatus: false,
       autoReactStatus: false,
       statusReactionEmoji: "💚",
       autoReply: true,
@@ -39,13 +39,8 @@ function getEnvConfig() {
       allowedSenders: parseNumberList(process.env.ALLOWED_NUMBERS)
     },
     ai: {
-      provider: process.env.AI_PROVIDER || "auto", // "auto", "anthropic", "openai", "gemini"
-      anthropicApiKey: process.env.CLAUDE_API_KEY || process.env.ANTHROPIC_API_KEY || "",
-      anthropicModel: process.env.ANTHROPIC_MODEL || "claude-3-5-sonnet-20241022",
-      openaiApiKey: process.env.OPENAI_API_KEY || "",
-      openaiModel: process.env.OPENAI_MODEL || "gpt-4o-mini",
-      geminiApiKey: process.env.GEMINI_API_KEY || "",
-      geminiModel: process.env.GEMINI_MODEL || "gemini-1.5-flash",
+      provider: "groq",
+      groqModel: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
       systemInstructions: `You are a polite, helpful WhatsApp personal AI assistant for ${process.env.ASSISTANT_OWNER_NAME || 'your owner'}. 
 Reply concisely, naturally, and conversationally. Keep answers short, friendly, and appropriate for instant messaging.`
     },
@@ -88,10 +83,8 @@ class ConfigManager extends EventEmitter {
           rules: parsed.rules || defaultConfig.rules
         };
 
-        // Normalize legacy model names if present
-        if (merged.ai.geminiModel && merged.ai.geminiModel.includes('gemini-2')) {
-          merged.ai.geminiModel = 'gemini-1.5-flash';
-        }
+        merged.ai.provider = "groq";
+        merged.ai.groqModel = process.env.GROQ_MODEL || merged.ai.groqModel || "openai/gpt-oss-120b";
 
         return merged;
       }
@@ -136,7 +129,9 @@ Reply concisely, naturally, and conversationally. Keep answers short, friendly, 
 
   saveConfig(cfg) {
     try {
-      fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2), 'utf8');
+      const safeConfig = { ...cfg, ai: { ...(cfg.ai || {}) } };
+      delete safeConfig.ai.groqApiKey;
+      fs.writeFileSync(CONFIG_PATH, JSON.stringify(safeConfig, null, 2), 'utf8');
     } catch (err) {
       console.error('Error saving config file:', err);
     }

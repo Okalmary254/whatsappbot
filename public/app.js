@@ -282,17 +282,15 @@ function applyConfig(config) {
   const toggleStatus = document.getElementById('toggleAutoStatus');
   const toggleReply = document.getElementById('toggleAutoReply');
   const replyMode = document.getElementById('replyMode');
-  const geminiModel = document.getElementById('geminiModel') || document.getElementById('aiModel');
-  const apiKey = document.getElementById('geminiApiKey');
+  const groqModel = document.getElementById('groqModel');
   const instructions = document.getElementById('systemInstructions');
   const delayInput = document.getElementById('naturalDelayMs') || document.getElementById('naturalDelay');
   const ignoreGroups = document.getElementById('ignoreGroups');
 
-  if (toggleStatus) toggleStatus.checked = config.bot.autoViewStatus ?? true;
+  if (toggleStatus) toggleStatus.checked = false;
   if (toggleReply) toggleReply.checked = config.bot.autoReply ?? true;
   if (replyMode) replyMode.value = config.bot.replyMode || 'ai';
-  if (geminiModel) geminiModel.value = config.ai.model || 'gemini-2.0-flash';
-  if (apiKey) apiKey.value = config.ai.geminiApiKey || '';
+  if (groqModel) groqModel.value = config.ai.groqModel || 'openai/gpt-oss-120b';
   if (instructions) instructions.value = config.ai.systemInstructions || '';
   if (delayInput) delayInput.value = config.bot.naturalDelayMs || 2500;
   if (ignoreGroups) ignoreGroups.checked = config.bot.ignoreGroups ?? true;
@@ -309,11 +307,7 @@ function initFormListeners() {
   const saveRulesBtn = document.getElementById('saveRulesBtn');
   const clearLogsBtn = document.getElementById('clearLogsBtn');
 
-  if (toggleStatus) {
-    toggleStatus.addEventListener('change', (e) => {
-      saveBotToggle({ autoViewStatus: e.target.checked });
-    });
-  }
+  if (toggleStatus) toggleStatus.checked = false;
 
   if (toggleReply) {
     toggleReply.addEventListener('change', (e) => {
@@ -324,7 +318,7 @@ function initFormListeners() {
   if (aiForm) {
     aiForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const modelVal = (document.getElementById('geminiModel') || document.getElementById('aiModel'))?.value || 'gemini-2.0-flash';
+      const modelVal = document.getElementById('groqModel')?.value.trim() || 'openai/gpt-oss-120b';
       const delayVal = parseInt((document.getElementById('naturalDelayMs') || document.getElementById('naturalDelay'))?.value, 10) || 2000;
 
       const updatedConfig = {
@@ -336,8 +330,8 @@ function initFormListeners() {
         },
         ai: {
           ...currentConfig.ai,
-          model: modelVal,
-          geminiApiKey: document.getElementById('geminiApiKey').value.trim(),
+          provider: 'groq',
+          groqModel: modelVal,
           systemInstructions: document.getElementById('systemInstructions').value.trim()
         }
       };
