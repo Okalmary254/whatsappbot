@@ -129,7 +129,9 @@ Reply concisely, naturally, and conversationally. Keep answers short, friendly, 
 
   saveConfig(cfg) {
     try {
-      fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2), 'utf8');
+      const safeConfig = { ...cfg, ai: { ...(cfg.ai || {}) } };
+      delete safeConfig.ai.groqApiKey;
+      fs.writeFileSync(CONFIG_PATH, JSON.stringify(safeConfig, null, 2), 'utf8');
     } catch (err) {
       console.error('Error saving config file:', err);
     }
