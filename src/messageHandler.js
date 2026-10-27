@@ -141,13 +141,6 @@ class MessageHandler {
       await sock.sendMessage(remoteJid, { text: reply }, { quoted: msg });
       logger.log('system', `▶️ Owner resumed auto-replies.`);
 
-    } else if (cmd === '/statusdigest' || cmd === '/digest') {
-      await sock.sendMessage(remoteJid, { text: '⏳ Generating status digest for today...' }, { quoted: msg });
-      const todayStatuses = chatStore.getTodayStatusViews();
-      const digestReply = await aiService.generateStatusDigest(todayStatuses, config);
-      await sock.sendMessage(remoteJid, { text: digestReply }, { quoted: msg });
-      logger.log('system', `📊 Owner generated status digest (${todayStatuses.length} updates).`);
-
     } else if (cmd === '/deleted') {
       const deletedMsgs = chatStore.getDeletedMessages().slice(0, 10);
       if (deletedMsgs.length === 0) {
