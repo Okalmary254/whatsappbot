@@ -11,7 +11,7 @@ class AIService {
 
     // Groq is the only supported AI provider. Keep the API key in the environment,
     // not in config.json, which may be committed to source control.
-    const apiKey = (process.env.GROQ_API_KEY || aiConfig.groqApiKey || '').trim();
+    const apiKey = (process.env.GROQ_API_KEY || '').trim();
     const model = (process.env.GROQ_MODEL || aiConfig.groqModel || 'openai/gpt-oss-120b').trim();
 
     if (mode === 'rules') {
