@@ -119,9 +119,29 @@ async function saveConfig(userId, email, patch) {
 function sendError(res, status, message) { return res.status(status).json({ error: message }); }
 
 function mount(app) {
-  app.get(['/login', '/login/'], (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'auth.html')));
-  app.get(['/signup', '/signup/'], (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'auth.html')));
-  app.get(['/portal', '/portal/'], (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'portal.html')));
+  app.get('/', async (req, res) => {
+    try {
+      const account = await accountForRequest(req);
+      return res.redirect(account ? '/portal' : '/login');
+    } catch (_) {
+      return res.redirect('/login');
+    }
+  });
+  app.get(['/login', '/login/'], async (req, res) => {
+    const account = await accountForRequest(req).catch(() => null);
+    if (account) return res.redirect('/portal');
+    return res.sendFile(path.join(__dirname, '..', 'public', 'auth.html'));
+  });
+  app.get(['/signup', '/signup/'], async (req, res) => {
+    const account = await accountForRequest(req).catch(() => null);
+    if (account) return res.redirect('/portal');
+    return res.sendFile(path.join(__dirname, '..', 'public', 'auth.html'));
+  });
+  app.get(['/portal', '/portal/'], async (req, res) => {
+    const account = await accountForRequest(req).catch(() => null);
+    if (!account) return res.redirect('/login');
+    return res.sendFile(path.join(__dirname, '..', 'public', 'portal.html'));
+  });
   app.get('/portal.js', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'portal.js')));
   app.get('/auth.js', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'auth.js')));
   app.get('/portal.css', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'portal.css')));
