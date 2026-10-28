@@ -42,8 +42,8 @@ class MessageHandler {
 
     // Per-contact controls are available to every user in a direct chat.
     // They pause only replies to that contact, not the whole bot.
-    if (!key.fromMe && !isGroup && /^\/(pause|resume|unpause|status|help)(?:\\s|$)/i.test(trimmedText)) {
-      const cmd = trimmedText.split(/\\s+/)[0].toLowerCase();
+    if (!key.fromMe && !isGroup && /^\/(pause|resume|unpause|status|help)(?:\s|$)/i.test(trimmedText)) {
+      const cmd = trimmedText.split(/\s+/)[0].toLowerCase();
       const currentConfig = configManager.getConfig();
       const pausedSenders = Array.isArray(currentConfig.bot.pausedSenders)
         ? currentConfig.bot.pausedSenders.map(String)
