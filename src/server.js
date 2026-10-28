@@ -38,6 +38,9 @@ function authorizeRequest(req) {
   return isLoopback && dashboardHost === '127.0.0.1';
 }
 
+app.use(express.json({ limit: '1mb' }));
+require('./tenantPortal').mount(app);
+
 app.use((req, res, next) => {
   if (!sameOrigin(req)) return res.status(403).send('Cross-origin requests are not allowed.');
   if (!authorizeRequest(req)) {
