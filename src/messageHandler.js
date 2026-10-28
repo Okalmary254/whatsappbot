@@ -40,6 +40,53 @@ class MessageHandler {
       return;
     }
 
+    // Per-contact controls are available to every user in a direct chat.
+    // They pause only replies to that contact, not the whole bot.
+    if (!key.fromMe && !isGroup && /^\/(pause|resume|unpause|status|help)(?:\\s|$)/i.test(trimmedText)) {
+      const cmd = trimmedText.split(/\\s+/)[0].toLowerCase();
+      const currentConfig = configManager.getConfig();
+      const pausedSenders = Array.isArray(currentConfig.bot.pausedSenders)
+        ? currentConfig.bot.pausedSenders.map(String)
+        : [];
+      const isPausedForThisUser = pausedSenders.includes(senderNumber);
+
+      if (cmd === '/pause') {
+        if (!isPausedForThisUser) {
+          configManager.updateConfig({ bot: { pausedSenders: [...pausedSenders, senderNumber] } });
+        }
+        await sock.sendMessage(remoteJid, {
+          text: '⏸️ *Replies paused for this chat.* I will stop replying to your messages. Send /resume whenever you want me to reply again.'
+        }, { quoted: msg });
+        logger.log('system', `User ${senderNumber} paused replies for their chat.`);
+        return;
+      }
+
+      if (cmd === '/resume' || cmd === '/unpause') {
+        configManager.updateConfig({
+          bot: { pausedSenders: pausedSenders.filter(number => number !== senderNumber) }
+        });
+        await sock.sendMessage(remoteJid, {
+          text: '▶️ *Replies resumed for this chat.* You can send /pause at any time to stop replies again.'
+        }, { quoted: msg });
+        logger.log('system', `User ${senderNumber} resumed replies for their chat.`);
+        return;
+      }
+
+      if (cmd === '/status') {
+        await sock.sendMessage(remoteJid, {
+          text: `*Your chat status:* ${isPausedForThisUser ? '⏸️ Paused' : '✅ Active'}\\nSend /pause to stop replies to you, or /resume to enable them again.`
+        }, { quoted: msg });
+        return;
+      }
+
+      if (cmd === '/help') {
+        await sock.sendMessage(remoteJid, {
+          text: '*WhatsApp AI Assistant commands*\\n/pause - Stop replies to you\\n/resume - Start replies to you again\\n/status - Check your reply status'
+        }, { quoted: msg });
+        return;
+      }
+    }
+
     // -------------------------------------------------------------
     // AUTOMATIC REPLIES FOR INCOMING CONTACT MESSAGES
     // -------------------------------------------------------------
@@ -53,6 +100,14 @@ class MessageHandler {
 
     // Check group chat setting
     if (isGroup && config.bot.ignoreGroups) return;
+
+    // A user's pause affects only their own direct chat.
+    const pausedSenders = Array.isArray(config.bot.pausedSenders) ? config.bot.pausedSenders : [];
+    if (!isGroup && pausedSenders.includes(senderNumber)) {
+      logger.log('system', `Skipped auto-reply to ${senderNumber}: this user has paused replies.`);
+      return;
+    }
+
 
     // Check Ignored numbers filter (IGNORE_NUMBERS env / config)
     if (config.bot.ignoredSenders && config.bot.ignoredSenders.length > 0) {
