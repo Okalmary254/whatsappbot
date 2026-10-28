@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Whatsy | Your WhatsApp Assistant</title>
+  <link rel="stylesheet" href="/portal.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/portal"><span class="brand-mark">W</span><span>Whatsy</span></a>
+    <div class="account-tools"><span id="accountEmail" class="muted">Loading account…</span><button id="logoutButton" class="secondary-button">Sign out</button></div>
+  </header>
+  <main class="workspace">
+    <section class="welcome">
+      <div><p class="eyebrow">PERSONAL WORKSPACE</p><h1>Your WhatsApp assistant</h1><p class="muted">Connect your number and manage your own assistant. Other Whatsy users cannot access your session or messages.</p></div>
+      <div class="connection-pill"><span class="status-dot" id="statusDot"></span><span id="statusLabel">Checking connection…</span></div>
+    </section>
+    <div class="dashboard-grid">
+      <section class="panel">
+        <p class="eyebrow">01 / CONNECTION</p><h2>Link your WhatsApp</h2>
+        <p class="muted">Enter your full phone number with country code, then enter the generated code in WhatsApp under Linked devices.</p>
+        <form id="pairingForm" class="stack">
+          <label for="phoneNumber">WhatsApp phone number</label>
+          <input id="phoneNumber" type="tel" inputmode="tel" placeholder="+254712345678" autocomplete="tel" required>
+          <button class="primary-button" id="pairButton" type="submit">Generate pairing code</button>
+        </form>
+        <div id="pairingResult" class="pairing-result hidden" aria-live="polite"></div>
+        <div class="steps"><strong>On your phone</strong><ol><li>Open WhatsApp settings.</li><li>Choose Linked devices, then Link a device.</li><li>Choose “Link with phone number instead”.</li><li>Enter the code shown here.</li></ol></div>
+        <button id="disconnectButton" class="danger-button hidden" type="button">Disconnect this WhatsApp number</button>
+      </section>
+      <section class="panel">
+        <p class="eyebrow">02 / BEHAVIOUR</p><h2>Assistant settings</h2>
+        <form id="settingsForm" class="stack">
+          <label class="toggle-row"><span><strong>Automatic replies</strong><small>Respond to incoming direct messages.</small></span><input id="autoReply" type="checkbox"></label>
+          <label class="toggle-row"><span><strong>Pause replies</strong><small>Keep WhatsApp connected but stop AI replies.</small></span><input id="isPaused" type="checkbox"></label>
+          <label class="toggle-row"><span><strong>Reply in groups</strong><small>Off by default to avoid unsolicited group replies.</small></span><input id="replyInGroups" type="checkbox"></label>
+          <label for="ownerName">Assistant owner name</label><input id="ownerName" maxlength="60" required>
+          <label for="systemInstructions">AI instructions</label><textarea id="systemInstructions" rows="5" maxlength="4000"></textarea>
+          <div class="two-columns"><div><label for="minDelayMs">Minimum delay (ms)</label><input id="minDelayMs" type="number" min="0" max="10000" required></div><div><label for="maxDelayMs">Maximum delay (ms)</label><input id="maxDelayMs" type="number" min="0" max="15000" required></div></div>
+          <button class="primary-button" type="submit" id="saveButton">Save settings</button>
+          <p id="settingsMessage" class="muted" aria-live="polite"></p>
+        </form>
+      </section>
+    </div>
+    <section class="panel messages-panel"><div class="panel-heading"><div><p class="eyebrow">03 / ACTIVITY</p><h2>Recent messages</h2></div><button id="refreshMessages" class="secondary-button">Refresh</button></div><p class="muted">Only messages handled by this Whatsy account appear here.</p><div id="messagesList" class="messages-list"><p class="muted">Loading messages…</p></div></section>
+    <p class="fine-print bottom-note">WhatsApp session credentials are stored under a private server-side directory per account. Production deployments need a persistent disk mounted at DATA_DIR so linked sessions survive restarts.</p>
+  </main>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="/portal.js" defer></script>
+</body>
+</html>
