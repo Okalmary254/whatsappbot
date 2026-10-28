@@ -10,6 +10,8 @@ const bot = require('./bot');
 const chatStore = require('./chatStore');
 
 const app = express();
+// Render terminates TLS at its trusted proxy; preserve client IPs for auth throttling.
+app.set('trust proxy', 1);
 const server = http.createServer(app);
 const dashboardPassword = process.env.DASHBOARD_PASSWORD || '';
 const dashboardHost = process.env.HOST || '127.0.0.1';
