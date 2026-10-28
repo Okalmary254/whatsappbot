@@ -8,6 +8,22 @@ const SESSION_COOKIE = 'whatsy_session';
 const SESSION_DAYS = 30;
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..');
 let schemaReady;
+const authAttempts = new Map();
+
+function limitAuthAttempts(req, res, next) {
+  const now = Date.now();
+  const key = (req.ip || req.socket.remoteAddress || 'unknown') + ':' + req.path;
+  const recent = (authAttempts.get(key) || []).filter((timestamp) => now - timestamp < 15 * 60 * 1000);
+  if (recent.length >= 10) return sendError(res, 429, 'Too many attempts. Wait 15 minutes and try again.');
+  recent.push(now);
+  authAttempts.set(key, recent);
+  if (authAttempts.size > 5000) {
+    for (const [entry, times] of authAttempts) {
+      if (!times.length || now - times[times.length - 1] > 15 * 60 * 1000) authAttempts.delete(entry);
+    }
+  }
+  next();
+}
 
 function ensureSchema() {
   if (!schemaReady) {
@@ -110,7 +126,7 @@ function mount(app) {
   app.get('/auth.js', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'auth.js')));
   app.get('/portal.css', (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'portal.css')));
 
-  app.post('/api/tenant/signup', async (req, res) => {
+  app.post('/api/tenant/signup', limitAuthAttempts, async (req, res) => {
     try {
       if (!sameOrigin(req)) return sendError(res, 403, 'Cross-origin request rejected.');
       await ensureSchema();
@@ -132,7 +148,7 @@ function mount(app) {
     }
   });
 
-  app.post('/api/tenant/login', async (req, res) => {
+  app.post('/api/tenant/login', limitAuthAttempts, async (req, res) => {
     try {
       if (!sameOrigin(req)) return sendError(res, 403, 'Cross-origin request rejected.');
       await ensureSchema();
