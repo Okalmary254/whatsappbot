@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Whatsy Account</title>
+  <link rel="stylesheet" href="/portal.css">
+</head>
+<body class="auth-body">
+  <main class="auth-card">
+    <a class="brand" href="/login"><span class="brand-mark">W</span><span>Whatsy</span></a>
+    <p class="eyebrow">YOUR WHATSAPP AI WORKSPACE</p>
+    <h1 id="authTitle">Sign in to Whatsy</h1>
+    <p class="muted" id="authSubtitle">Manage your own WhatsApp assistant and session.</p>
+    <form id="authForm">
+      <label for="email">Email address</label>
+      <input id="email" name="email" type="email" autocomplete="email" maxlength="254" required>
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" minlength="10" maxlength="256" required>
+      <p class="muted small">Use at least 10 characters.</p>
+      <button class="primary-button" type="submit" id="submitButton">Sign in</button>
+      <p class="form-error" id="formError" role="alert"></p>
+    </form>
+    <p class="auth-switch" id="authSwitch"></p>
+    <p class="fine-print">Each account has its own WhatsApp session, settings and message history.</p>
+  </main>
+  <script src="/auth.js" defer></script>
+</body>
+</html>
