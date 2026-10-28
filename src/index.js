@@ -6,6 +6,7 @@ require('dotenv').config({ path: path.resolve(__dirname, '..', '.env') });
 const { startServer } = require('./server');
 const bot = require('./bot');
 const tenantBotManager = require('./tenantBotManager');
+const tenantPortal = require('./tenantPortal');
 
 console.log('----------------------------------------------------');
 console.log('🤖 Starting WhatsApp Groq Personal AI Agent');
@@ -17,9 +18,11 @@ console.log('[Groq] Model:', process.env.GROQ_MODEL || 'openai/gpt-oss-120b');
 startServer();
 
 // Start each account's own WhatsApp session when persistent credentials exist.
-tenantBotManager.startExistingSessions().catch((err) => {
-  console.error('[Whatsy] Could not restore account sessions:', err.message);
-});
+tenantPortal.ensureSchema()
+  .then(() => tenantBotManager.startExistingSessions())
+  .catch((err) => {
+    console.error('[Whatsy] Could not initialize account sessions:', err.message);
+  });
 
 // Keep the previous single-account dashboard available only when explicitly enabled.
 if (process.env.ENABLE_LEGACY_BOT === 'true') bot.start();
