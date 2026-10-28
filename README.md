@@ -37,3 +37,20 @@ This patch replaces the SQLite database adapter and JSON-file persistence for ch
 - `src/bot.js` in the provided source still uses Baileys `useMultiFileAuthState(AUTH_FOLDER)`. WhatsApp login credentials are therefore still file-based. Neon will not persist that folder. You need a persistent disk or a separate PostgreSQL-backed Baileys auth adapter before deployments/restarts can retain the WhatsApp session.
 - The `getGroupSettings`, `updateGroupSettings`, and `incrementWarning` functions retain their original synchronous return shape, while PostgreSQL writes run asynchronously. The first settings read returns defaults while the database cache warms. For strict consistency, change these APIs and their callers to `async`/`await`.
 - The database URL must be a valid Neon connection string, commonly with `?sslmode=require` and optionally `&channel_binding=require`. Do not commit it to Git.
+
+
+## Multi-user Whatsy portal (feature branch)
+
+The `feature/multi-user-whatsy` branch adds account signup/login at `/signup` and `/login`, with the private workspace at `/portal`. Each account has its own PostgreSQL settings/message records and a separate Baileys auth directory under `DATA_DIR/tenant_auth/<account-id>`.
+
+### Required deployment configuration
+
+- `DATABASE_URL_POOLED` (or `DATABASE_URL`) must point to the Neon PostgreSQL database.
+- `GROQ_API_KEY` must be configured for AI replies.
+- Set `HOST=0.0.0.0` and configure the existing `DASHBOARD_PASSWORD` for the legacy dashboard if you keep it exposed.
+- Set `DATA_DIR` to a persistent Render disk mount. Without a persistent disk, per-account WhatsApp sessions will be lost on restart/redeploy.
+- `ENABLE_LEGACY_BOT=false` is the default. Set it to `true` only if you intentionally want to run the old shared single-account bot alongside the new account-based portal. Do not share the old dashboard password with tenant users.
+
+### Multi-user MVP scope and caveats
+
+The portal currently supports signup/login, pairing-code connection, per-account auto-reply settings, AI instructions, pause/resume, and account-scoped recent message history. Tenant sessions use HttpOnly cookies and hashed server-side session tokens; passwords are stored as salted scrypt hashes. The Baileys auth files are isolated by account on disk, so use one application instance with persistent storage for this initial version. Add email verification, password reset, signup/login rate limiting, encrypted credential storage, and multi-instance session coordination before opening public self-service registration widely. Existing legacy account credentials are not automatically migrated into a tenant account.
